@@ -1,366 +1,181 @@
-# Pulse
+<div align="center">
 
-**Send a notification with one HTTP call. Pulse handles the rest.**
+<img src="docs/assets/hero.svg" alt="Pulse — one HTTP call, five channels, every language" width="100%">
 
-Email, mobile push, SMS, an in-app inbox and outbound webhooks — behind a single
-API. It renders your template in the recipient's language, respects their
-opt-outs, retries what fails, and logs every attempt.
+<br>
 
-```bash
-curl -X POST $PULSE/v1/notifications \
-  -H "Authorization: Bearer $YOUR_KEY" \
-  -d '{ "to": { "externalId": "user-42" },
-        "templateKey": "order-shipped",
-        "data": { "order": { "id": "A-1001", "eta": "Sunday" } } }'
+**Stop rebuilding notifications in every project.**
+
+Pulse takes one HTTP call and delivers it over email, push, SMS, an in-app inbox
+and webhooks — in the recipient's language, respecting their opt-outs, retrying
+what fails, logging every attempt.
+
+<br>
+
+![Node](https://img.shields.io/badge/node-%E2%89%A524-3ad0bd?style=flat-square&labelColor=0d1518)
+![TypeScript](https://img.shields.io/badge/typescript-5.9-3ad0bd?style=flat-square&labelColor=0d1518)
+![AWS](https://img.shields.io/badge/aws-serverless-3ad0bd?style=flat-square&labelColor=0d1518)
+![Tests](https://img.shields.io/badge/tests-97%20passing-3ad0bd?style=flat-square&labelColor=0d1518)
+![License](https://img.shields.io/badge/license-MIT-3ad0bd?style=flat-square&labelColor=0d1518)
+
+<br>
+
+**[Get running](#1--get-it-running) · [Send one](#2--send-your-first-notification) · [Use it in your app](#3--use-it-in-your-app) · [Reference](#reference)**
+
+</div>
+
+<br>
+
+> **You host it. You own it.**
+> No signup, no account, no API key to get from anyone. You deploy Pulse and mint
+> your own keys.
+
+---
+
+## What actually happens
+
+```mermaid
+flowchart LR
+    A["Your app<br/>POST /v1/notifications"] --> B{Pulse}
+    B --> C["Renders your template<br/>in their language"]
+    C --> D["Checks their opt-outs<br/>and bounce history"]
+    D --> E1[email]
+    D --> E2[push]
+    D --> E3[SMS]
+    D --> E4[in-app]
+    D --> E5[webhook]
+    E1 --> F["Delivery log<br/>every attempt, every error"]
+    E2 --> F
+    E3 --> F
+    E4 --> F
+    E5 --> F
 ```
 
-That one call just sent an email, a push notification, an SMS and an in-app
-message — in Bengali if that's the user's language, skipping any channel they've
-unsubscribed from.
-
-> **You run Pulse yourself.** There's no signup, no account, and no API key to
-> get from anyone. You deploy it and mint your own keys. It's your service.
+Your app never decides *how* to notify someone. It says **what happened**; Pulse
+decides the rest.
 
 ---
 
-## Contents
+# 1 · Get it running
 
-[Why](#why) · [Quick start](#quick-start) · [The console](#the-console) ·
-[Core ideas](#core-ideas) · [Templates](#templates) · [Sending](#sending) ·
-[Reading results](#reading-results) · [Preferences & bounces](#preferences--bounces) ·
-[In your app](#in-your-app) · [API reference](#api-reference) ·
-[Deploying](#deploying) · [How it's built](#how-its-built)
+**Needs:** Node 24+, pnpm 11+, Docker.
+
+```bash
+git clone https://github.com/arafatomer66/pulse.git && cd pulse
+
+pnpm install
+docker compose up -d     # local stand-ins for the AWS bits
+cp .env.example .env
+pnpm build
+pnpm seed                # a demo account, a user, two templates
+pnpm dev                 # the API + the delivery workers
+```
+
+Open **<http://localhost:3100/console>**. It signs itself in.
+
+> [!IMPORTANT]
+> `pnpm dev` starts **two** processes — the API that *accepts* messages, and the
+> workers that *deliver* them. If a message sits at `queued` forever, the workers
+> aren't running.
 
 ---
 
-## Why
+# 2 · Send your first notification
 
-Every project ends up rebuilding the same thing: an email sender, then a push
-sender, then retry logic, then a way to stop mailing people who unsubscribed,
-then templates, then translations, then a log so support can answer "did they
-get it?"
-
-Pulse is that, once. Point every project at it. Each gets its own API key,
-templates and data, completely isolated from the others.
+In the console, on the **Send** tab:
 
 | | |
 |---|---|
-| **Five channels** | email · push · SMS · in-app inbox · webhooks |
-| **One template, all channels** | Write the email, push, SMS and in-app copy in one document |
-| **Two languages built in** | English and Bengali, with per-channel fallback |
-| **Opt-outs that just work** | Someone unsubscribes once; every future send respects it, with no code change |
-| **Bounce protection** | Bad addresses are suppressed automatically — this is what keeps your email deliverable |
-| **Safe retries** | Send the same request twice, it delivers once |
-| **Scheduling** | Send later, cancel any time before it goes |
-| **A real delivery log** | Every message, channel, attempt and provider error |
+| **1** | Leave *Recipient by* on `Subscriber ID` |
+| **2** | Paste `sub_demo000000000000000000` |
+| **3** | Pick the `order-shipped` template |
+| **4** | Press **Send** |
+
+Two seconds later you get a result per channel:
+
+```
+status: delivered
+
+  email    delivered   <4c0307ad-c986-…@pulse.local>
+  inapp    delivered   01KZ1N0JNBE54JYSE324FF121K
+  push     delivered   log-1785688246951
+  sms      delivered   log-1785688246956
+```
+
+Open **<http://localhost:8125>** to read the email that actually left.
+
+That's a real multi-channel notification, sent. Now make your app do it.
 
 ---
 
-## Quick start
+# 3 · Use it in your app
 
-You need **Node 24+**, **pnpm 11+** and **Docker**.
+### Step 1 — tell Pulse who your users are
 
-```bash
-git clone https://github.com/arafatomer66/pulse.git
-cd pulse
-
-pnpm install
-docker compose up -d      # local stand-ins for DynamoDB, SQS and email
-cp .env.example .env
-pnpm build
-pnpm seed                 # creates a demo account, a user and two templates
-pnpm dev                  # starts the API and the delivery workers
-```
-
-Now open **<http://localhost:3100/console>** — it signs itself in.
-
-> **`pnpm dev` starts two things**: the API that accepts messages, and the
-> workers that deliver them. If a message stays at `queued` forever, the workers
-> aren't running.
-
-### Send your first notification
-
-1. Open the console, go to the **Send** tab
-2. Leave *Recipient by* on `Subscriber ID`, paste `sub_demo000000000000000000`
-3. Pick the `order-shipped` template, leave everything else alone
-4. Press **Send**
-
-About two seconds later you'll see a result per channel. Open
-<http://localhost:8125> to read the email that actually left.
-
-That's a real multi-channel notification, sent.
-
----
-
-## The console
-
-`http://localhost:3100/console` — a full operator UI, no build step.
-
-| Tab | For |
-|---|---|
-| **Send** | Compose and fire a message; watch per-channel results land |
-| **Delivery log** | Every message ever sent. Click one for channel detail, the exact rendered content, and every attempt |
-| **Templates** | See what exists; publish new ones |
-| **Subscribers** | Add people, look them up, see their preferences and devices |
-| **Inbox** | What your app's notification bell would show one person |
-| **Usage** | Messages sent this month against the quota |
-
-Use it to operate and debug. Your app talks to the API directly.
-
----
-
-## Core ideas
-
-Four nouns. Once these land, the rest of the API is predictable.
-
-### Tenant — one per project
-
-ShareDeal is a tenant, DevAdda is another. Each has its own templates,
-subscribers, quota and log, and **cannot see any other tenant's data**.
-
-Tenants are created with the admin token, not an API key:
-
-```bash
-curl -X POST $PULSE/admin/v1/tenants \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"name":"ShareDeal Social","plan":"growth"}'
-```
-
-### API key — how a project authenticates
-
-```bash
-curl -X POST $PULSE/admin/v1/tenants/$TENANT_ID/keys \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"name":"production"}'
-# → { "key": "pk_live_fa059e9a…",
-#     "warning": "Store this key now — it is not recoverable." }
-```
-
-Only a hash is stored, so the key is shown **once** and can never be retrieved —
-lose it and you issue a new one. You generate these yourself; nothing is fetched
-from any third party.
-
-### Subscriber — a person who receives things
-
-Their email, phone, language, devices and opt-outs. The field that matters is
-`externalId` — **your own user ID**:
+Once per user. Use **your own** user ID as `externalId`, so you never store a
+Pulse ID anywhere.
 
 ```bash
 curl -X POST $PULSE/v1/subscribers -H "Authorization: Bearer $KEY" -d '{
   "externalId": "sd-user-8821",
   "email": "omer@example.com",
   "phone": "01712345678",
-  "locale": "bn",
-  "attributes": { "name": "Omer" }
+  "locale": "bn"
 }'
 ```
 
-Set it once, then address people by the ID your database already uses — you never
-store a Pulse ID anywhere. Bangladeshi phone formats are normalised to
-`+8801712345678` automatically.
+*(`01712345678` becomes `+8801712345678` automatically.)*
 
-### Template — what to say, everywhere
+### Step 2 — write what to say, once, for every channel
 
-One document covering every channel and language. See [Templates](#templates).
-
-### The five channels
-
-| Channel | Needs | Delivered by |
-|---|---|---|
-| `email` | An email address | AWS SES, **or any SMTP server** |
-| `push` | A registered device token | Firebase — covers Android, iOS and web |
-| `sms` | A phone number | BulkSMS BD, or AWS SNS |
-| `inapp` | Nothing but the subscriber | Pulse itself; your app reads the feed |
-| `webhook` | A registered endpoint | A signed HTTPS POST to you |
-
-**You rarely name channels.** Omit them and Pulse uses every channel the template
-defines and the person can actually receive on.
-
----
-
-## Templates
-
-```json
-{
+```bash
+curl -X POST $PULSE/v1/templates -H "Authorization: Bearer $KEY" -d '{
   "key": "order-shipped",
   "name": "Order shipped",
-  "category": "transactional",
   "locales": {
     "en": {
-      "email": {
-        "subject": "Order {{ order.id }} is on its way",
-        "html": "<p>Hi {{ subscriber.name }}, arriving {{ order.eta }}.</p>"
-      },
+      "email": { "subject": "Order {{ order.id }} is on its way",
+                 "html": "<p>Hi {{ subscriber.name }}, arriving {{ order.eta }}.</p>" },
       "push":  { "title": "On its way", "body": "Order {{ order.id }}" },
-      "sms":   { "text": "Order {{ order.id }} shipped. Arriving {{ order.eta }}." },
+      "sms":   { "text": "Order {{ order.id }} shipped." },
       "inapp": { "title": "Shipped", "body": "Order {{ order.id }}",
                  "deeplink": "/orders/{{ order.id }}" }
     },
     "bn": {
-      "email": { "subject": "অর্ডার {{ order.id }} পাঠানো হয়েছে",
-                 "html": "<p>পথে আছে।</p>" },
+      "email": { "subject": "অর্ডার {{ order.id }} পাঠানো হয়েছে", "html": "<p>পথে আছে।</p>" },
       "push":  { "title": "পাঠানো হয়েছে", "body": "অর্ডার {{ order.id }}" }
     }
   }
-}
+}'
 ```
 
-Text is [Liquid](https://liquidjs.com) — `{{ order.id }}` pulls from the `data`
-you send. It's sandboxed, so a template can't execute code.
+Or paste it into the console's **Templates** tab.
 
-**Three rules:**
+### Step 3 — send, from your code
 
-- **English is the fallback.** `locales.en` is required. Above, Bengali defines
-  no `sms` — so a Bengali user still gets the English SMS rather than silence.
-- **A missing channel is skipped, not an error.** There's no `webhook` above; ask
-  for webhook anyway and it returns `skipped` while everything else delivers.
-- **Editing publishes a new version.** Old versions stay readable, and a message
-  already accepted keeps the wording it was accepted with — an edit can never
-  rewrite something already in flight.
-
-**You never pass a language.** It comes from the subscriber's `locale`. Pass
-`locale` on a send only to override that.
-
----
-
-## Sending
-
-### The everyday case
-
-```json
-{ "to": { "externalId": "sd-user-8821" },
-  "templateKey": "order-shipped",
-  "data": { "order": { "id": "A-1001", "eta": "Sunday" } } }
+```ts
+await fetch(`${PULSE_URL}/v1/notifications`, {
+  method: 'POST',
+  headers: {
+    authorization: `Bearer ${PULSE_KEY}`,
+    'content-type': 'application/json',
+    'idempotency-key': `order-${order.id}-shipped`,   // retry-safe
+  },
+  body: JSON.stringify({
+    to: { externalId: user.id },
+    templateKey: 'order-shipped',
+    data: { order },
+  }),
+});
 ```
 
-### A one-time passcode — SMS only
+**That's the whole integration.** No channel logic, no language check, no
+unsubscribe check, no retry loop — all of it lives in Pulse.
 
-Never let an OTP fan out to email.
+<details>
+<summary><b>The same thing as a reusable NestJS service</b></summary>
 
-```json
-{ "to": { "externalId": "sd-user-8821" },
-  "templateKey": "otp",
-  "channels": ["sms"],
-  "data": { "code": "4821" } }
-```
-
-### Later, and cancellable
-
-```json
-{ "to": { "externalId": "sd-user-8821" },
-  "templateKey": "cart-reminder",
-  "sendAt": "2026-08-03T09:00:00Z" }
-```
-
-```
-POST /v1/notifications/{messageId}/cancel
-```
-
-### Everyone on a topic
-
-```
-POST /v1/topics/dhaka-buyers/broadcast
-Idempotency-Key: launch-announce-v1
-
-{ "templateKey": "new-feature", "channels": ["inapp", "push"] }
-```
-
-### A one-off with no template
-
-Note `to.email` — no stored subscriber needed.
-
-```json
-{ "to": { "email": "someone@example.com" },
-  "channels": ["email"],
-  "content": { "email": { "subject": "Your invoice",
-                          "html": "<p>Attached.</p>" } } }
-```
-
-### Always send an Idempotency-Key
-
-Use an ID from your own domain:
-
-```
-Idempotency-Key: order-1001-shipped
-```
-
-Retry the same call and Pulse returns the original result and **sends nothing**.
-Without it, a retried job or a double-tapped button sends twice.
-
----
-
-## Reading results
-
-`POST` returns immediately with a `messageId` and `status: "queued"` — accepted,
-not yet delivered. Fetch the message to see what happened:
-
-```
-GET /v1/notifications/{messageId}
-```
-
-### Per channel
-
-| Status | What happened | Act? |
-|---|---|---|
-| `delivered` | The provider accepted it | No |
-| `suppressed` | They opted out, or the address previously hard-bounced. Deliberately not sent | **No — this is correct** |
-| `skipped` | Nothing to send on — no phone, no device, no template body | Only if you expected otherwise |
-| `failed` | Rejected after retries | Yes — read `error` |
-
-### The whole message
-
-| Status | Means |
-|---|---|
-| `queued` | Accepted, heading to the workers |
-| `scheduled` | Waiting for its time. Still cancellable |
-| `processing` | Some channels reported, others haven't |
-| `delivered` | Nothing failed |
-| `partial` | Some landed, some failed |
-| `failed` | Everything failed |
-| `cancelled` | You cancelled it in time |
-
-> A message where every channel was `suppressed` reports **`delivered`**. Pulse
-> did exactly what the person's preferences asked — that's success, not failure.
-
----
-
-## Preferences & bounces
-
-### Someone unsubscribes
-
-```
-POST /v1/subscribers/{id}/unsubscribe
-{ "channel": "email" }
-```
-
-Every future send skips email for them. You add no checks anywhere in your code.
-
-Finer control — marketing off, receipts on:
-
-```
-PUT /v1/subscribers/{id}/preferences
-{ "categories": { "marketing": false, "transactional": true } }
-```
-
-### An address goes bad
-
-When a mailbox permanently rejects mail, or someone marks a message as spam, the
-address goes on a suppression list. Every later send to it returns `suppressed`
-without touching the provider.
-
-> **This is not optional.** AWS measures your bounce and complaint rates. Cross
-> roughly 5% bounces or 0.1% complaints and they throttle or suspend your ability
-> to send email *at all*.
-
-Temporary problems — a full mailbox, a DNS blip — are deliberately **not**
-suppressed. Those clear up, and cutting someone off permanently over an afternoon
-would be wrong.
-
----
-
-## In your app
-
-### NestJS / Node — write this once
+<br>
 
 ```ts
 @Injectable()
@@ -371,7 +186,7 @@ export class PulseService {
   async notify(input: {
     userId: string;
     templateKey: string;
-    data: Record<string, unknown>;
+    data?: Record<string, unknown>;
     channels?: string[];
     idempotencyKey?: string;
   }) {
@@ -386,7 +201,7 @@ export class PulseService {
         to: { externalId: input.userId },
         templateKey: input.templateKey,
         channels: input.channels,
-        data: input.data,
+        data: input.data ?? {},
       }),
     });
     if (!res.ok) throw new Error(`pulse ${res.status}: ${await res.text()}`);
@@ -395,7 +210,7 @@ export class PulseService {
 }
 ```
 
-Every call site becomes one line:
+Every call site is then one line:
 
 ```ts
 await this.pulse.notify({
@@ -406,48 +221,207 @@ await this.pulse.notify({
 });
 ```
 
-### Flutter — two things to wire
+</details>
+
+<details>
+<summary><b>Flutter — push registration and the notification bell</b></summary>
+
+<br>
 
 ```dart
-// 1 — on login, register the device so push can reach them
+// On login — so push can reach them
 await dio.post('/v1/subscribers/$subscriberId/devices', data: {
   'token': await FirebaseMessaging.instance.getToken(),
   'platform': Platform.isIOS ? 'ios' : 'android',
 });
 
-// 2 — the notification bell
+// The bell
 final res = await dio.get('/v1/inbox',
     queryParameters: {'subscriberId': subscriberId});
 
-res.data['unreadCount'];   // the badge
+res.data['unreadCount'];   // badge
 res.data['data'];          // title, body, deeplink, readAt — newest first
 
 await dio.post('/v1/inbox/$itemId/read',
     queryParameters: {'subscriberId': subscriberId});
 ```
 
-### Errors
-
-Always the same shape. Switch on `code` — that's the part that stays stable.
-
-```json
-{ "error": { "code": "TEMPLATE_NOT_FOUND", "message": "no template 'welcome'" } }
-```
-
-| Code | Means |
-|---|---|
-| `INVALID_API_KEY` | Key unknown or revoked |
-| `FORBIDDEN_SCOPE` | Key lacks a permission |
-| `VALIDATION_FAILED` | Bad body — `details` lists the fields |
-| `TEMPLATE_NOT_FOUND` | No template by that key for this tenant |
-| `QUOTA_EXCEEDED` | Monthly limit hit |
-| `RATE_LIMITED` | Too many requests this minute |
-| `SCHEDULE_IN_PAST` | `sendAt` already passed |
-| `IDEMPOTENCY_KEY_REUSED` | Same key, different body |
+</details>
 
 ---
 
-## API reference
+# Reference
+
+## Common sends
+
+<table>
+<tr><td width="50%">
+
+**An OTP — SMS only**<br>
+Never let a passcode fan out to email.
+
+```json
+{ "to": { "externalId": "sd-user-8821" },
+  "templateKey": "otp",
+  "channels": ["sms"],
+  "data": { "code": "4821" } }
+```
+
+</td><td width="50%">
+
+**Scheduled, and cancellable**
+
+```json
+{ "to": { "externalId": "sd-user-8821" },
+  "templateKey": "cart-reminder",
+  "sendAt": "2026-08-03T09:00:00Z" }
+```
+
+`POST /v1/notifications/{id}/cancel`
+
+</td></tr>
+<tr><td>
+
+**Everyone on a topic**
+
+```json
+POST /v1/topics/dhaka-buyers/broadcast
+
+{ "templateKey": "new-feature",
+  "channels": ["inapp", "push"] }
+```
+
+</td><td>
+
+**One-off, no template, no subscriber**
+
+```json
+{ "to": { "email": "a@example.com" },
+  "channels": ["email"],
+  "content": { "email": {
+    "subject": "Your invoice",
+    "html": "<p>Attached.</p>" } } }
+```
+
+</td></tr>
+</table>
+
+> [!TIP]
+> Always send an `Idempotency-Key` from your own domain — `order-1001-shipped`.
+> Retry the same call and Pulse returns the original result and **sends nothing**.
+
+## The five channels
+
+| Channel | Needs | Delivered by |
+|---|---|---|
+| `email` | An email address | AWS SES, **or any SMTP server** |
+| `push` | A registered device token | Firebase — Android, iOS and web |
+| `sms` | A phone number | BulkSMS BD, or AWS SNS |
+| `inapp` | Nothing but the subscriber | Pulse itself; your app reads the feed |
+| `webhook` | A registered endpoint | A signed HTTPS POST to you |
+
+**You rarely name channels.** Omit `channels` and Pulse uses every one the
+template defines and the person can actually receive on.
+
+## What the results mean
+
+<table>
+<tr><td width="50%">
+
+**Per channel**
+
+| | |
+|---|---|
+| `delivered` | The provider accepted it |
+| `suppressed` | Opted out, or previously bounced. **Deliberate** |
+| `skipped` | Nothing to send on — no phone, no device, no body |
+| `failed` | Rejected after retries — read `error` |
+
+</td><td width="50%">
+
+**The whole message**
+
+| | |
+|---|---|
+| `queued` | Accepted, heading to the workers |
+| `scheduled` | Waiting. Still cancellable |
+| `delivered` | Nothing failed |
+| `partial` | Some landed, some failed |
+| `failed` | Everything failed |
+
+</td></tr>
+</table>
+
+> [!NOTE]
+> A message where every channel was `suppressed` reports **`delivered`**. Pulse
+> did exactly what the person's preferences asked — that's success, not failure.
+
+## Opt-outs and bounces
+
+```bash
+POST /v1/subscribers/{id}/unsubscribe     { "channel": "email" }
+PUT  /v1/subscribers/{id}/preferences     { "categories": { "marketing": false } }
+```
+
+Every future send respects it. You add no checks anywhere in your code.
+
+When an address permanently bounces or someone marks a message as spam, it goes
+on a suppression list automatically and is never mailed again.
+
+> [!WARNING]
+> This isn't optional. AWS measures your bounce and complaint rates — cross ~5%
+> bounces or ~0.1% complaints and they throttle or suspend your ability to send
+> email **at all**.
+
+<details>
+<summary><b>Templates — the three rules</b></summary>
+
+<br>
+
+Text is [Liquid](https://liquidjs.com); `{{ order.id }}` pulls from the `data`
+you send. It's sandboxed, so templates can't execute code.
+
+- **English is the fallback.** `locales.en` is required. If Bengali defines no
+  `sms`, a Bengali user still gets the English SMS rather than silence.
+- **A missing channel is skipped, not an error.** Ask for `webhook` on a template
+  that has none and it returns `skipped` while everything else delivers.
+- **Editing publishes a new version.** Old versions stay readable, and a message
+  already accepted keeps the wording it was accepted with — an edit can never
+  rewrite something already in flight.
+
+**You never pass a language.** It comes from the subscriber's `locale`. Pass
+`locale` on a send only to override.
+
+</details>
+
+<details>
+<summary><b>Tenants and API keys — how multi-project works</b></summary>
+
+<br>
+
+Each project is a **tenant** with its own templates, subscribers, quota and log,
+completely unable to see any other tenant's data.
+
+```bash
+# Create a tenant (admin token, not an API key)
+curl -X POST $PULSE/admin/v1/tenants -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"name":"ShareDeal Social","plan":"growth"}'
+
+# Issue it a key
+curl -X POST $PULSE/admin/v1/tenants/$TENANT_ID/keys -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"name":"production"}'
+# → { "key": "pk_live_fa059e9a…", "warning": "Store this key now — it is not recoverable." }
+```
+
+Only a hash is stored, so a key is shown **once**. Lose it and you issue a new
+one.
+
+</details>
+
+<details>
+<summary><b>Every endpoint</b></summary>
+
+<br>
 
 Full OpenAPI 3.1 spec: [`docs/openapi.yaml`](docs/openapi.yaml)
 
@@ -477,14 +451,44 @@ POST   /admin/v1/tenants/:id/keys
 POST   /admin/v1/tenants/:id/suspend
 ```
 
+</details>
+
+<details>
+<summary><b>Error codes</b></summary>
+
+<br>
+
+Always the same shape. Switch on `code` — that's the stable part.
+
+```json
+{ "error": { "code": "TEMPLATE_NOT_FOUND", "message": "no template 'welcome'" } }
+```
+
+| Code | Means |
+|---|---|
+| `INVALID_API_KEY` | Key unknown or revoked |
+| `FORBIDDEN_SCOPE` | Key lacks a permission |
+| `VALIDATION_FAILED` | Bad body — `details` lists the fields |
+| `TEMPLATE_NOT_FOUND` | No template by that key for this tenant |
+| `QUOTA_EXCEEDED` | Monthly limit hit |
+| `RATE_LIMITED` | Too many requests this minute |
+| `SCHEDULE_IN_PAST` | `sendAt` already passed |
+| `IDEMPOTENCY_KEY_REUSED` | Same key, different body |
+
+</details>
+
 ---
 
-## Deploying
+## Going live
 
-Two independent tracks — you don't need both, or either, to start.
+Two independent tracks. You need neither to start.
 
-**Email today, no AWS.** Point `EMAIL_PROVIDER=smtp` at any SMTP host — Postmark,
-Resend, Brevo:
+<table>
+<tr><td width="50%">
+
+### Email today, no AWS
+
+Point at any SMTP host — Postmark, Resend, Brevo:
 
 ```env
 EMAIL_PROVIDER=smtp
@@ -492,10 +496,17 @@ SMTP_HOST=smtp.resend.com
 SMTP_PORT=587
 ```
 
-**Email on SES.** Cheaper at volume ($0.10 per thousand), but you must verify a
-domain and ask AWS to lift the sandbox — usually 24–48 hours.
+Works immediately.
 
-### To AWS
+</td><td width="50%">
+
+### Email on SES
+
+Cheaper at volume ($0.10/1000), but you must verify a domain and ask AWS to lift
+the sandbox — usually **24–48 hours**.
+
+</td></tr>
+</table>
 
 ```bash
 aws configure                        # your own account
@@ -504,38 +515,48 @@ pnpm cdk bootstrap                   # once per account/region
 pnpm cdk deploy --all -c env=dev     # dev sends nothing — a safe first run
 ```
 
-Full sequence including SES setup:
-**[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md)**
-When something lands in a dead-letter queue:
-**[`docs/runbooks/dlq-replay.md`](docs/runbooks/dlq-replay.md)**
-
-### Checklist
+**Checklist**
 
 - [ ] `ADMIN_TOKEN` — 32+ random characters. Production won't boot without one
-- [ ] Email — an SMTP provider, or a verified SES domain with SPF, DKIM and DMARC
-- [ ] Push — a Firebase project and its service-account JSON (covers iOS too)
-- [ ] SMS — a BulkSMS BD key. Roughly 1/100th of AWS SNS for Bangladesh
+- [ ] Email — an SMTP provider, or a verified SES domain with SPF, DKIM, DMARC
+- [ ] Push — a Firebase project + service-account JSON (covers iOS too)
+- [ ] SMS — a BulkSMS BD key. Roughly **1/100th** of AWS SNS for Bangladesh
 - [ ] Bounce handling — connect SES feedback to the topic the deploy creates
 - [ ] One tenant per project, so revoking one key doesn't affect the others
 
-### Cost
+Step-by-step: **[`docs/runbooks/deploy.md`](docs/runbooks/deploy.md)** ·
+When something hits a dead-letter queue: **[`docs/runbooks/dlq-replay.md`](docs/runbooks/dlq-replay.md)**
+
+### What it costs
 
 **~$0.40/month idle** — nothing runs when nobody sends. About **$17/month** of
 infrastructure at a million notifications. Delivery is the real cost: SES is
-$0.10 per thousand, and SMS dominates everything at volume. Full breakdown in
-[`docs/COSTS.md`](docs/COSTS.md).
+$0.10 per thousand, and SMS dominates everything at volume.
+Full breakdown: [`docs/COSTS.md`](docs/COSTS.md)
 
 ---
 
-## How it's built
+## Under the hood
 
-```
-API Gateway → Lambda (NestJS) → SQS per channel → worker Lambdas → providers
-                    ↓                  ↓                 ↓
-        DynamoDB (one table, 3 indexes)         dead-letter queues
+```mermaid
+flowchart LR
+    A[API Gateway] --> B["Lambda · NestJS<br/>control plane"]
+    B --> C[(DynamoDB<br/>one table)]
+    B --> Q1[SQS email]
+    B --> Q2[SQS push]
+    B --> Q3[SQS sms]
+    B --> Q4[SQS in-app]
+    B --> Q5[SQS webhook]
+    Q1 --> W["Worker Lambdas"]
+    Q2 --> W
+    Q3 --> W
+    Q4 --> W
+    Q5 --> W
+    W --> P["SES · FCM · SMS gateway · HTTPS"]
+    W -.retries exhausted.-> DLQ[Dead-letter queues]
 ```
 
-Rendering happens when a message is accepted, not when it's delivered — so a
+Rendering happens when a message is **accepted**, not when it's delivered — so a
 template error is an immediate `422`, and editing a template can't change a
 message already in flight.
 
@@ -547,28 +568,36 @@ packages/e2e/       full-stack test suite
 infra/              AWS CDK
 ```
 
-More: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
-this guide as a web page: [`docs/guide.html`](docs/guide.html)
-
 ### Testing
 
 ```bash
 pnpm verify     # typecheck + tests + end-to-end + cdk synth
 ```
 
-97 tests, nothing mocked. The repository tests run against real DynamoDB; the
+**97 tests, nothing mocked.** Repository tests run against real DynamoDB; the
 end-to-end suite drives real HTTP through the real app, real queues and real
 SMTP. A mock would happily accept a database constraint the real engine rejects.
 
 ---
 
+## Docs
+
+| | |
+|---|---|
+| **[Guide](docs/guide.html)** | This, as a browsable page |
+| **[Architecture](docs/ARCHITECTURE.md)** | The shape, and why each decision went that way |
+| **[API spec](docs/openapi.yaml)** | OpenAPI 3.1 |
+| **[Costs](docs/COSTS.md)** | Full cost model |
+| **[Deploy](docs/runbooks/deploy.md)** · **[DLQ replay](docs/runbooks/dlq-replay.md)** | Runbooks |
+
 ## Status
 
-Runs end to end locally with all suites green. **Not yet deployed to AWS** — the
+Runs end to end locally, all suites green. **Not yet deployed to AWS** — the
 infrastructure compiles and CI enforces that, but the first deploy needs your
 credentials. Client SDKs for Node and Flutter aren't built yet; the snippets
 above are the current integration path.
 
-## License
-
-MIT
+<div align="center">
+<br>
+MIT · built for <a href="https://github.com/arafatomer66">@arafatomer66</a>'s projects
+</div>

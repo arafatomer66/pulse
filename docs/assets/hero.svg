@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="340" viewBox="0 0 1200 340" role="img" aria-label="Pulse — one call, five channels">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1518"/>
+      <stop offset="1" stop-color="#0a1113"/>
+    </linearGradient>
+    <linearGradient id="trace" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#0d7469" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#1a9c8c" stop-opacity="0.85"/>
+      <stop offset="0.52" stop-color="#3ad0bd" stop-opacity="1"/>
+      <stop offset="0.86" stop-color="#1a9c8c" stop-opacity="0.7"/>
+      <stop offset="1"    stop-color="#0d7469" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#3ad0bd" stop-opacity="0.30"/>
+      <stop offset="0.5" stop-color="#3ad0bd" stop-opacity="0.10"/>
+      <stop offset="1"   stop-color="#3ad0bd" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="340" fill="url(#ground)"/>
+
+  <!-- faint measurement grid, like a scope -->
+  <g stroke="#16262a" stroke-width="1">
+    <path d="M0 60.5H1200M0 120.5H1200M0 180.5H1200M0 240.5H1200M0 300.5H1200"/>
+    <path d="M120.5 0V340M240.5 0V340M360.5 0V340M480.5 0V340M600.5 0V340M720.5 0V340M840.5 0V340M960.5 0V340M1080.5 0V340"/>
+  </g>
+
+  <!-- the pulse: quiet, then a spike, then ripples out to the channels -->
+  <path d="M0 196 H300 L332 196 L348 128 L364 244 L380 172 L396 196 H470
+           L500 196 L516 160 L532 214 L548 196 H640
+           L700 196 L716 182 L732 208 L748 196 H1200"
+        fill="none" stroke="url(#trace)" stroke-width="2.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M0 197 H1200 V340 H0 Z" fill="url(#fade)" opacity="0.22"/>
+
+  <!-- wordmark -->
+  <g transform="translate(80,96)">
+    <circle cx="9" cy="-9" r="9" fill="#3ad0bd"/>
+    <circle cx="9" cy="-9" r="17" fill="none" stroke="#3ad0bd" stroke-opacity="0.35" stroke-width="1.5"/>
+    <circle cx="9" cy="-9" r="26" fill="none" stroke="#3ad0bd" stroke-opacity="0.15" stroke-width="1.5"/>
+    <text x="46" y="4" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+          font-size="60" font-weight="800" letter-spacing="-2" fill="#eef5f5">Pulse</text>
+  </g>
+
+  <text x="80" y="150" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="21" font-weight="500" fill="#a7bcc0">One HTTP call. Five channels. Every language.</text>
+
+  <!-- channel chips -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600">
+    <g transform="translate(80,258)">
+      <rect x="0" y="-18" width="72" height="28" rx="14" fill="#0f2a28" stroke="#1f4d47"/>
+      <text x="36" y="1" fill="#7fdccd" text-anchor="middle">email</text>
+    </g>
+    <g transform="translate(164,258)">
+      <rect x="0" y="-18" width="64" height="28" rx="14" fill="#0f2a28" stroke="#1f4d47"/>
+      <text x="32" y="1" fill="#7fdccd" text-anchor="middle">push</text>
+    </g>
+    <g transform="translate(240,258)">
+      <rect x="0" y="-18" width="58" height="28" rx="14" fill="#0f2a28" stroke="#1f4d47"/>
+      <text x="29" y="1" fill="#7fdccd" text-anchor="middle">sms</text>
+    </g>
+    <g transform="translate(310,258)">
+      <rect x="0" y="-18" width="74" height="28" rx="14" fill="#0f2a28" stroke="#1f4d47"/>
+      <text x="37" y="1" fill="#7fdccd" text-anchor="middle">in-app</text>
+    </g>
+    <g transform="translate(396,258)">
+      <rect x="0" y="-18" width="86" height="28" rx="14" fill="#0f2a28" stroke="#1f4d47"/>
+      <text x="43" y="1" fill="#7fdccd" text-anchor="middle">webhook</text>
+    </g>
+  </g>
+
+  <!-- the call, set as code, right-aligned -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14.5">
+    <rect x="700" y="78" width="424" height="184" rx="12" fill="#101b1e" stroke="#1e3235"/>
+    <text x="724" y="112" fill="#5f7378">POST</text>
+    <text x="772" y="112" fill="#cfe0e2">/v1/notifications</text>
+    <text x="724" y="146" fill="#5f7378">{</text>
+    <text x="742" y="170" fill="#7fdccd">"to"</text>
+    <text x="780" y="170" fill="#5f7378">: { </text>
+    <text x="816" y="170" fill="#7fdccd">"externalId"</text>
+    <text x="920" y="170" fill="#5f7378">: </text>
+    <text x="938" y="170" fill="#cfe0e2">"user-42"</text>
+    <text x="1016" y="170" fill="#5f7378"> },</text>
+    <text x="742" y="194" fill="#7fdccd">"templateKey"</text>
+    <text x="854" y="194" fill="#5f7378">: </text>
+    <text x="872" y="194" fill="#cfe0e2">"order-shipped"</text>
+    <text x="724" y="218" fill="#5f7378">}</text>
+    <text x="724" y="248" fill="#3ad0bd">→ 202 delivered on 4 channels</text>
+  </g>
+</svg>
