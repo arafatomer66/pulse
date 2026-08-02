@@ -700,9 +700,31 @@ function refreshAll() {
   loadUsage();
 }
 
+/**
+ * Sign in automatically when the seeded demo key works.
+ *
+ * There is no signup and no key to fetch from anywhere — `pnpm seed` mints one
+ * locally. Probing for it means a fresh clone opens the console already working
+ * instead of showing an empty form. Anything other than 200 (a real deployment,
+ * a re-seeded table) leaves the field blank for you to paste your own key.
+ */
+async function autoSignIn() {
+  if (keyEl.value.trim()) return refreshAll();
+  try {
+    const probe = await fetch('/v1/usage', { headers: { authorization: 'Bearer ' + DEMO_KEY } });
+    if (!probe.ok) return;
+    keyEl.value = DEMO_KEY;
+    localStorage.setItem('pulse.key', DEMO_KEY);
+    toast('Signed in with the local demo key');
+    refreshAll();
+  } catch {
+    /* API not up yet — the health dot already says so. */
+  }
+}
+
 health();
 setInterval(health, 15000);
-refreshAll();
+autoSignIn();
 </script>
 </body>
 </html>
