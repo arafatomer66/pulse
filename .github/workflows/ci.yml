@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck · test · e2e · synth
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The suites run against real DynamoDB, real SQS-compatible queues and a
+    # real SMTP sink. Mocks would not catch the conditional-write and redrive
+    # behaviour these tests exist to prove.
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:2.5.2
+        ports: ['8102:8000']
+        options: >-
+          --health-cmd "true" --health-interval 5s --health-timeout 3s --health-retries 3
+
+      mailhog:
+        image: mailhog/mailhog:v1.0.1
+        ports: ['1125:1025', '8125:8025']
+
+    env:
+      AWS_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      DYNAMODB_ENDPOINT: http://localhost:8102
+      SQS_ENDPOINT: http://localhost:9324
+      QUEUE_URL_PREFIX: http://localhost:9324/000000000000
+      MAILHOG_URL: http://localhost:8125
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ElasticMQ needs its config file mounted, which `services:` cannot do —
+      # so it is started manually once the repo is checked out.
+      - name: Start ElasticMQ
+        run: |
+          docker run -d --name elasticmq -p 9324:9324 \
+            -v "$PWD/elasticmq.conf:/opt/elasticmq.conf:ro" \
+            softwaremill/elasticmq-native:1.6.11
+          for i in $(seq 1 30); do
+            curl -sf "http://localhost:9324/?Action=ListQueues" >/dev/null && break
+            sleep 1
+          done
+          curl -sf "http://localhost:9324/?Action=ListQueues" >/dev/null
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit + repository integration tests
+        run: pnpm --filter @pulse/core test
+
+      - name: End-to-end suite
+        run: pnpm --filter @pulse/e2e test
+
+      # Proves the infrastructure still compiles and bundles. No credentials are
+      # needed and nothing is deployed — `cdk deploy` stays a manual step.
+      - name: CDK synth
+        run: pnpm --filter @pulse/infra synth -- -c env=dev
+        env:
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+          CDK_DEFAULT_REGION: ap-south-1
+
+      - name: ElasticMQ logs on failure
+        if: failure()
+        run: docker logs elasticmq | tail -50

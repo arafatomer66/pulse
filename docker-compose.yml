@@ -1,0 +1,43 @@
+# Local Pulse stack. Ports are deliberately offset from the user's other
+# projects (sharedeal-social 5440/6390, shipline 5438/3001) so several repos
+# can run at once without collisions.
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:2.5.2
+    container_name: pulse-dynamodb
+    # A named volume mounts root-owned, but the image runs as uid 1000, so
+    # SQLite cannot create its DB file — and DynamoDB Local does not fail fast:
+    # it accepts connections and then hangs every API call while retrying
+    # forever. Running as root is the standard workaround and keeps the data
+    # persistent across restarts.
+    user: root
+    command: ['-jar', 'DynamoDBLocal.jar', '-sharedDb', '-dbPath', '/data']
+    # 8100 is taken by odysseus-chromadb on this machine; 8102 is clear.
+    ports:
+      - '8102:8000'
+    volumes:
+      - pulse-dynamodb:/data
+    working_dir: /home/dynamodblocal
+    # No healthcheck: the dynamodb-local image ships neither curl nor wget, so
+    # every CMD-SHELL probe reports unhealthy. Readiness is polled in code
+    # instead — see waitForDynamo() in packages/core/src/testing/wait.ts.
+
+  # SQS-wire-compatible queue server — lets the workers use the real AWS SDK locally.
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.6.11
+    container_name: pulse-elasticmq
+    ports:
+      - '9324:9324'
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf:ro
+
+  # Captures every outbound email so the e2e suite can assert on rendered output.
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: pulse-mailhog
+    ports:
+      - '1125:1025' # SMTP
+      - '8125:8025' # web UI + JSON API
+
+volumes:
+  pulse-dynamodb:

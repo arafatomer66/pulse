@@ -1,0 +1,953 @@
+openapi: 3.1.0
+info:
+  title: Pulse
+  version: '1.0.0'
+  description: |
+    Multi-tenant notification delivery — email, push, SMS, in-app inbox and
+    outbound webhooks behind one API.
+
+    ## Authentication
+    Every tenant-facing endpoint takes an API key as `Authorization: Bearer pk_live_…`
+    (or the `X-API-Key` header). Only the SHA-256 of a key is stored, so a key
+    is shown exactly once, at creation, and cannot be recovered afterwards.
+
+    The `/admin/v1` surface is guarded separately by `ADMIN_TOKEN` — it creates
+    the tenants that API keys belong to, so it cannot be authenticated by one.
+
+    ## Errors
+    Every error returns `{ "error": { "code", "message", "details"? } }`.
+    Switch on `code`; `message` may be reworded at any time.
+
+    ## Idempotency
+    `POST /v1/notifications` honours an `Idempotency-Key` header. A repeat with
+    the same key and body replays the original response and sends nothing; the
+    replay carries `Idempotent-Replay: true`. The same key with a *different*
+    body is a `409 IDEMPOTENCY_KEY_REUSED`.
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3100
+    description: Local
+  - url: https://{apiId}.execute-api.ap-south-1.amazonaws.com
+    description: AWS
+    variables:
+      apiId:
+        default: CHANGEME
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Notifications
+  - name: Subscribers
+  - name: Templates
+  - name: Inbox
+  - name: Webhooks
+  - name: Usage
+  - name: Admin
+  - name: System
+
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Liveness and readiness
+      security: []
+      responses:
+        '200':
+          description: Service state and dependency health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  dynamodb:
+                    type: object
+                    properties:
+                      ok: { type: boolean }
+                      detail: { type: string }
+                      latencyMs: { type: integer }
+                  uptimeSeconds: { type: integer }
+
+  /v1/notifications:
+    post:
+      tags: [Notifications]
+      summary: Send a notification
+      description: |
+        Accepts the message and fans it out to one queue per channel. Returns
+        202 — accepted for delivery, not delivered. Per-channel outcomes are
+        read back from `GET /v1/notifications/{messageId}`.
+
+        Rendering happens synchronously, so a template error is a 422 here
+        rather than a surprise in a dead-letter queue minutes later.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendRequest' }
+            examples:
+              template:
+                summary: Send a stored template to a subscriber
+                value:
+                  to: { subscriberId: sub_9f2c1a }
+                  templateKey: order-shipped
+                  data: { order: { id: A-1001, eta: Sunday } }
+              inline:
+                summary: One-off email with no stored template
+                value:
+                  to: { email: someone@example.com }
+                  channels: [email]
+                  content:
+                    email:
+                      subject: 'Welcome, {{ name }}'
+                      html: '<p>Glad you are here.</p>'
+                  data: { name: Omer }
+              scheduled:
+                summary: Bengali SMS, scheduled
+                value:
+                  to: { externalId: user-42 }
+                  templateKey: otp
+                  channels: [sms]
+                  locale: bn
+                  data: { code: '4821' }
+                  sendAt: '2026-08-03T09:00:00Z'
+      responses:
+        '202':
+          description: Accepted for delivery
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptedMessage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [Notifications]
+      summary: Delivery log, newest first
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: A page of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Message' }
+                  nextCursor: { type: string }
+
+  /v1/notifications/{messageId}:
+    get:
+      tags: [Notifications]
+      summary: Message status with per-channel detail and the attempt log
+      parameters:
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '200':
+          description: The message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageWithAttempts' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/notifications/{messageId}/cancel:
+    post:
+      tags: [Notifications]
+      summary: Cancel a scheduled or queued message
+      description: |
+        Only `scheduled` and `queued` messages can be cancelled. Any channel job
+        still on a queue when the cancellation lands is dropped by the worker
+        rather than delivered.
+      parameters:
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '201':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptedMessage' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/topics/{topic}/broadcast:
+    post:
+      tags: [Notifications]
+      summary: Send one template to every subscriber on a topic
+      parameters:
+        - name: topic
+          in: path
+          required: true
+          schema: { type: string }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateKey]
+              properties:
+                templateKey: { type: string }
+                channels:
+                  type: array
+                  items: { $ref: '#/components/schemas/Channel' }
+                locale: { $ref: '#/components/schemas/Locale' }
+                data: { type: object, additionalProperties: true }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topic: { type: string }
+                  accepted: { type: integer }
+                  messageIds:
+                    type: array
+                    items: { type: string }
+
+  /v1/events:
+    get:
+      tags: [Notifications]
+      summary: Delivery log (alias of GET /v1/notifications)
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200': { description: A page of messages }
+
+  /v1/subscribers:
+    post:
+      tags: [Subscribers]
+      summary: Create or update a subscriber
+      description: |
+        Upsert, matched by `subscriberId` then `externalId`. Preferences are
+        never reset by an upsert — they belong to the subscriber and change only
+        through `PUT /v1/subscribers/{id}/preferences`.
+
+        Bangladeshi phone formats (`01712345678`, `8801712345678`) are
+        normalised to E.164.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpsertSubscriber' }
+      responses:
+        '201':
+          description: The subscriber
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscriber' }
+
+  /v1/subscribers/{subscriberId}:
+    parameters:
+      - $ref: '#/components/parameters/SubscriberId'
+    get:
+      tags: [Subscribers]
+      summary: Fetch a subscriber
+      responses:
+        '200':
+          description: The subscriber
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscriber' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Subscribers]
+      summary: Update a subscriber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpsertSubscriber' }
+      responses:
+        '200':
+          description: The subscriber
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Subscriber' }
+
+  /v1/subscribers/{subscriberId}/preferences:
+    put:
+      tags: [Subscribers]
+      summary: Set channel and category opt-outs
+      description: |
+        Both maps are opt-out: a missing entry means opted in. Merged into the
+        existing preferences rather than replacing them.
+      parameters:
+        - $ref: '#/components/parameters/SubscriberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Preferences' }
+      responses:
+        '200':
+          description: The resulting preferences
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Preferences' }
+
+  /v1/subscribers/{subscriberId}/unsubscribe:
+    post:
+      tags: [Subscribers]
+      summary: One-click unsubscribe from a channel
+      parameters:
+        - $ref: '#/components/parameters/SubscriberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                channel: { $ref: '#/components/schemas/Channel' }
+                resubscribe: { type: boolean, default: false }
+      responses:
+        '201': { description: The resulting preferences }
+
+  /v1/subscribers/{subscriberId}/devices:
+    parameters:
+      - $ref: '#/components/parameters/SubscriberId'
+    get:
+      tags: [Subscribers]
+      summary: List registered device tokens
+      responses:
+        '200': { description: Device tokens }
+    post:
+      tags: [Subscribers]
+      summary: Register a device token
+      description: |
+        Re-registering the same token refreshes `lastSeenAt` and keeps the
+        original `createdAt`. Tokens FCM reports as permanently unregistered are
+        pruned automatically after a send.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token: { type: string }
+                platform: { type: string, enum: [ios, android, web] }
+                appVersion: { type: string }
+      responses:
+        '201': { description: The registered device }
+
+  /v1/subscribers/{subscriberId}/devices/{token}:
+    delete:
+      tags: [Subscribers]
+      summary: Remove a device token
+      parameters:
+        - $ref: '#/components/parameters/SubscriberId'
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed }
+
+  /v1/templates:
+    get:
+      tags: [Templates]
+      summary: List the newest version of every template
+      responses:
+        '200': { description: Templates }
+    post:
+      tags: [Templates]
+      summary: Publish a template version
+      description: |
+        Templates are append-only. Publishing an edit creates the next version
+        and leaves earlier ones readable, so a message already accepted for
+        delivery can never have its text change underneath it.
+
+        `locales.en` is required and is the per-channel fallback for every other
+        locale. Bodies are Liquid — sandboxed, no arbitrary code execution.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishTemplate' }
+      responses:
+        '201':
+          description: The published version
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+
+  /v1/templates/{key}:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Templates]
+      summary: Fetch a template
+      parameters:
+        - name: version
+          in: query
+          description: Omit for the newest version.
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: The template
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Templates]
+      summary: Publish the next version of this key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishTemplate' }
+      responses:
+        '200': { description: The published version }
+
+  /v1/inbox:
+    get:
+      tags: [Inbox]
+      summary: In-app notification feed, newest first
+      parameters:
+        - name: subscriberId
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: The feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/InboxItem' }
+                  nextCursor: { type: string }
+                  unreadCount: { type: integer }
+
+  /v1/inbox/unread-count:
+    get:
+      tags: [Inbox]
+      summary: Unread badge count
+      parameters:
+        - name: subscriberId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: '{ unreadCount }' }
+
+  /v1/inbox/{itemId}/read:
+    post:
+      tags: [Inbox]
+      summary: Mark one item read (idempotent)
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: subscriberId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Marked }
+
+  /v1/inbox/read-all:
+    post:
+      tags: [Inbox]
+      summary: Mark the recent feed read
+      parameters:
+        - name: subscriberId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: '{ marked }' }
+
+  /v1/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List endpoints (secrets redacted)
+      responses:
+        '200': { description: Endpoints }
+    post:
+      tags: [Webhooks]
+      summary: Register an outbound endpoint
+      description: |
+        The signing secret is returned in full exactly once, here.
+
+        Deliveries carry `Pulse-Signature: t=<unix>,v1=<hex hmac>`, an HMAC-SHA256
+        over `"<t>.<raw body>"`. Verify with a constant-time compare and reject
+        timestamps older than ~5 minutes — the timestamp inside the signed
+        string is what makes replay protection possible.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items: { type: string }
+                  default: ['*']
+      responses:
+        '201': { description: The endpoint, including its secret }
+
+  /v1/webhooks/{endpointId}:
+    delete:
+      tags: [Webhooks]
+      summary: Remove an endpoint
+      parameters:
+        - name: endpointId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Removed }
+
+  /v1/usage:
+    get:
+      tags: [Usage]
+      summary: Current billing period against the plan
+      description: One unit per message, not per channel. `byChannel` is the breakdown.
+      responses:
+        '200':
+          description: Usage snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  period: { type: string, example: '2026-08' }
+                  sent: { type: integer }
+                  quota: { type: integer }
+                  remaining: { type: integer }
+                  plan: { type: string }
+                  byChannel:
+                    type: object
+                    additionalProperties: { type: integer }
+
+  /admin/v1/tenants:
+    post:
+      tags: [Admin]
+      summary: Create a tenant
+      security: [{ AdminAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                plan: { type: string, enum: [free, growth, scale] }
+                monthlyQuota: { type: integer }
+                rateLimitPerMin: { type: integer }
+                retentionDays: { type: integer }
+      responses:
+        '201': { description: The tenant }
+
+  /admin/v1/tenants/{tenantId}/keys:
+    post:
+      tags: [Admin]
+      summary: Issue an API key
+      description: The plaintext key is in this response and nowhere else.
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                prefix: { type: string, enum: [pk_live, pk_test] }
+                scopes:
+                  type: array
+                  items: { $ref: '#/components/schemas/Scope' }
+      responses:
+        '201': { description: The key record plus the one-time plaintext }
+
+  /admin/v1/tenants/{tenantId}/suspend:
+    post:
+      tags: [Admin]
+      summary: Suspend a tenant
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: The tenant }
+
+  /admin/v1/tenants/{tenantId}/activate:
+    post:
+      tags: [Admin]
+      summary: Reactivate a tenant
+      security: [{ AdminAuth: [] }]
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201': { description: The tenant }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: '`Authorization: Bearer pk_live_…` (or the `X-API-Key` header)'
+    AdminAuth:
+      type: http
+      scheme: bearer
+      description: The platform `ADMIN_TOKEN`.
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from a previous page's `nextCursor`.
+      schema: { type: string }
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: string }
+    SubscriberId:
+      name: subscriberId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Unauthorized:
+      description: Missing, unknown or revoked API key
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Key lacks a required scope, or the tenant is suspended
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No such resource for this tenant
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Idempotency-key reuse, or the message is no longer cancellable
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Validation:
+      description: Request failed validation, or the send is undeliverable as specified
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Per-minute rate limit or monthly quota exhausted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Channel:
+      type: string
+      enum: [email, push, sms, inapp, webhook]
+
+    Locale:
+      type: string
+      enum: [en, bn]
+
+    Scope:
+      type: string
+      enum:
+        - notifications:send
+        - notifications:read
+        - subscribers:write
+        - subscribers:read
+        - templates:write
+        - templates:read
+        - inbox:read
+        - webhooks:write
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code. Switch on this.
+              examples:
+                - VALIDATION_FAILED
+                - INVALID_API_KEY
+                - QUOTA_EXCEEDED
+                - TEMPLATE_NOT_FOUND
+                - IDEMPOTENCY_KEY_REUSED
+                - SCHEDULE_IN_PAST
+            message: { type: string }
+            details: {}
+
+    Recipient:
+      type: object
+      description: |
+        Exactly one identification path is needed: `subscriberId` or
+        `externalId` resolve a stored subscriber (with preferences and devices);
+        a bare `email`/`phone` is an ad-hoc send with no stored preferences.
+      properties:
+        subscriberId: { type: string }
+        externalId: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+
+    SendRequest:
+      type: object
+      required: [to]
+      properties:
+        to: { $ref: '#/components/schemas/Recipient' }
+        templateKey:
+          type: string
+          description: Either this or `content` is required.
+        content:
+          $ref: '#/components/schemas/TemplateBodies'
+        channels:
+          type: array
+          description: Defaults to every channel the template defines a body for.
+          items: { $ref: '#/components/schemas/Channel' }
+        locale: { $ref: '#/components/schemas/Locale' }
+        category:
+          type: string
+          description: Drives per-subscriber category opt-out. Defaults to the template's.
+        data:
+          type: object
+          additionalProperties: true
+        sendAt:
+          type: string
+          format: date-time
+          description: Must be in the future. Delays over 15 minutes are handled by the scheduler.
+
+    TemplateBodies:
+      type: object
+      description: Per-channel bodies. An absent channel is `skipped`, not failed.
+      properties:
+        email:
+          type: object
+          required: [subject, html]
+          properties:
+            subject: { type: string }
+            html: { type: string }
+            text:
+              type: string
+              description: Derived from the HTML when omitted.
+        push:
+          type: object
+          required: [title, body]
+          properties:
+            title: { type: string }
+            body: { type: string }
+            imageUrl: { type: string }
+            data:
+              type: object
+              additionalProperties: { type: string }
+        sms:
+          type: object
+          required: [text]
+          properties:
+            text: { type: string }
+        inapp:
+          type: object
+          required: [title, body]
+          properties:
+            title: { type: string }
+            body: { type: string }
+            deeplink: { type: string }
+        webhook:
+          type: object
+          required: [event]
+          properties:
+            event: { type: string }
+            payload:
+              type: string
+              description: Liquid rendering to JSON. Defaults to the full `data` bag.
+
+    ChannelResult:
+      type: object
+      properties:
+        channel: { $ref: '#/components/schemas/Channel' }
+        status:
+          type: string
+          enum: [queued, delivered, failed, suppressed, skipped, cancelled]
+          description: |
+            `suppressed` — deliberately not sent (opt-out or suppression list).
+            `skipped` — nothing to send on (no template body, no destination).
+            Both are settled states, not failures.
+        providerMessageId: { type: string }
+        error: { type: string }
+        reason: { type: string }
+        attempts: { type: integer }
+        updatedAt: { type: string, format: date-time }
+
+    AcceptedMessage:
+      type: object
+      properties:
+        messageId: { type: string }
+        status:
+          type: string
+          enum: [queued, scheduled, processing, delivered, partial, failed, cancelled]
+        channels:
+          type: array
+          items: { $ref: '#/components/schemas/Channel' }
+        results:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/ChannelResult' }
+        scheduledFor: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    Message:
+      allOf:
+        - $ref: '#/components/schemas/AcceptedMessage'
+        - type: object
+          properties:
+            tenantId: { type: string }
+            subscriberId: { type: string }
+            templateKey: { type: string }
+            category: { type: string }
+            locale: { $ref: '#/components/schemas/Locale' }
+            rendered:
+              type: object
+              description: Content frozen at accept time, so a later template edit cannot change it.
+            data: { type: object, additionalProperties: true }
+            updatedAt: { type: string, format: date-time }
+
+    MessageWithAttempts:
+      allOf:
+        - $ref: '#/components/schemas/Message'
+        - type: object
+          properties:
+            attempts:
+              type: array
+              description: One row per delivery try, including retried ones.
+              items:
+                type: object
+                properties:
+                  channel: { $ref: '#/components/schemas/Channel' }
+                  status: { type: string }
+                  attempt: { type: integer }
+                  providerMessageId: { type: string }
+                  error: { type: string }
+                  at: { type: string, format: date-time }
+
+    Preferences:
+      type: object
+      properties:
+        channels:
+          type: object
+          additionalProperties: { type: boolean }
+          description: 'Missing entry = opted in. Example: `{ "email": false }`'
+        categories:
+          type: object
+          additionalProperties: { type: boolean }
+
+    UpsertSubscriber:
+      type: object
+      properties:
+        subscriberId: { type: string }
+        externalId: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        locale: { $ref: '#/components/schemas/Locale' }
+        timezone: { type: string, default: Asia/Dhaka }
+        attributes: { type: object, additionalProperties: true }
+        topics:
+          type: array
+          items: { type: string }
+
+    Subscriber:
+      allOf:
+        - $ref: '#/components/schemas/UpsertSubscriber'
+        - type: object
+          properties:
+            tenantId: { type: string }
+            preferences: { $ref: '#/components/schemas/Preferences' }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    PublishTemplate:
+      type: object
+      required: [key, name, locales]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        category: { type: string, default: transactional }
+        locales:
+          type: object
+          required: [en]
+          additionalProperties: { $ref: '#/components/schemas/TemplateBodies' }
+
+    Template:
+      allOf:
+        - $ref: '#/components/schemas/PublishTemplate'
+        - type: object
+          properties:
+            tenantId: { type: string }
+            version: { type: integer }
+            createdAt: { type: string, format: date-time }
+
+    InboxItem:
+      type: object
+      properties:
+        itemId: { type: string }
+        messageId: { type: string }
+        title: { type: string }
+        body: { type: string }
+        deeplink: { type: string }
+        category: { type: string }
+        readAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }

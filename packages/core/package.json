@@ -1,0 +1,39 @@
+{
+  "name": "@pulse/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.699.0",
+    "@aws-sdk/client-scheduler": "^3.699.0",
+    "@aws-sdk/client-ses": "^3.699.0",
+    "@aws-sdk/client-sesv2": "^3.1101.0",
+    "@aws-sdk/client-sns": "^3.699.0",
+    "@aws-sdk/client-sqs": "^3.699.0",
+    "@aws-sdk/lib-dynamodb": "^3.699.0",
+    "@smithy/node-http-handler": "^4.9.13",
+    "firebase-admin": "^13.0.1",
+    "liquidjs": "^10.19.0",
+    "nodemailer": "^6.9.16",
+    "ulid": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.17",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.6"
+  }
+}

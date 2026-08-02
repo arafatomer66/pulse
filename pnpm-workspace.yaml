@@ -1,0 +1,13 @@
+packages:
+  - 'packages/*'
+  - 'infra'
+
+# pnpm blocks postinstall scripts by default. These are the transitive deps that
+# genuinely need theirs to run: protobufjs generates its runtime descriptors for
+# firebase-admin's gRPC transport, and @firebase/util is pulled in alongside it.
+allowBuilds:
+  '@firebase/util': true
+  protobufjs: true
+  '@nestjs/core': true
+  '@swc/core': true
+  esbuild: true

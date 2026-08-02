@@ -1,0 +1,35 @@
+{
+  "name": "pulse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pulse — multi-tenant notification delivery service (email, push, SMS, in-app, webhook) on AWS serverless",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.11.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint packages infra",
+    "test": "pnpm --filter @pulse/core test",
+    "dev": "pnpm --parallel --filter @pulse/api --filter @pulse/workers dev",
+    "dev:api": "pnpm --filter @pulse/api dev",
+    "dev:workers": "pnpm --filter @pulse/workers dev",
+    "seed": "pnpm --filter @pulse/api seed",
+    "e2e": "pnpm build && pnpm --filter @pulse/e2e test",
+    "verify": "pnpm typecheck && pnpm test && pnpm e2e && pnpm infra:synth",
+    "infra:synth": "pnpm --filter @pulse/infra synth",
+    "up": "docker compose up -d",
+    "down": "docker compose down",
+    "reset": "docker compose down -v && docker compose up -d"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^24.10.1",
+    "eslint": "^9.39.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^4.0.6"
+  }
+}

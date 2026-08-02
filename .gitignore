@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+coverage/
+.DS_Store
+
+# CDK
+infra/cdk.out/
+infra/cdk.context.json
+
+# local provider credentials — never commit
+secrets/
+*firebase*.json
+!docs/**/*firebase*.json
