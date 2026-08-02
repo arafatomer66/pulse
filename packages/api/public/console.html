@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pulse Console</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#12161c; --muted:#697588; --line:#e3e7ee;
+    --accent:#0f766e; --accent-soft:#e6f4f1;
+    --ok:#0f766e; --warn:#b45309; --bad:#b91c1c; --info:#1d4ed8; --dim:#8b95a6;
+    --radius:10px; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0e1116; --panel:#161b22; --ink:#e8ecf2; --muted:#96a1b2; --line:#262d38;
+           --accent:#2dd4bf; --accent-soft:#12312e; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  a{color:var(--accent)}
+
+  header{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 18px;
+         display:flex;gap:14px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10}
+  .logo{font-weight:700;font-size:16px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim)}
+  .dot.up{background:var(--ok)} .dot.down{background:var(--bad)}
+  header input{flex:1;min-width:240px}
+
+  .wrap{max-width:1180px;margin:18px auto;padding:0 18px}
+  nav{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+  nav button{background:transparent;border:1px solid transparent;color:var(--muted);
+             padding:7px 13px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+  nav button:hover{color:var(--ink)}
+  nav button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--line)}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+        padding:16px;margin-bottom:14px}
+  .card h2{margin:0 0 4px;font-size:15px}
+  .card p.sub{margin:0 0 14px;color:var(--muted);font-size:12.5px}
+
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);
+        margin:0 0 5px;text-transform:uppercase;letter-spacing:.04em}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);
+        border-radius:8px;background:var(--bg);color:var(--ink);font-size:13px;font-family:inherit}
+  textarea{font-family:var(--mono);font-size:12.5px;min-height:120px;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:12px}
+  .field{min-width:0}
+
+  button.act{background:var(--accent);color:#fff;border:0;padding:9px 16px;border-radius:8px;
+             font-weight:600;cursor:pointer;font-size:13px}
+  button.act:hover{filter:brightness(1.08)}
+  button.act:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);
+               padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px}
+  .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;
+     letter-spacing:.04em;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tr.clickable{cursor:pointer}
+  tr.clickable:hover td{background:var(--accent-soft)}
+  .empty{color:var(--muted);padding:22px;text-align:center;font-size:13px}
+
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;
+        font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+  .pill.delivered{background:#dcfce7;color:#166534}
+  .pill.queued,.pill.processing,.pill.scheduled{background:#dbeafe;color:#1e40af}
+  .pill.partial{background:#fef3c7;color:#92400e}
+  .pill.failed{background:#fee2e2;color:#991b1b}
+  .pill.cancelled,.pill.skipped{background:#e5e7eb;color:#374151}
+  .pill.suppressed{background:#ede9fe;color:#5b21b6}
+  @media (prefers-color-scheme:dark){
+    .pill.delivered{background:#052e21;color:#5eead4}
+    .pill.queued,.pill.processing,.pill.scheduled{background:#0b2545;color:#93c5fd}
+    .pill.partial{background:#3a2a06;color:#fcd34d}
+    .pill.failed{background:#3b0d0d;color:#fca5a5}
+    .pill.cancelled,.pill.skipped{background:#242a33;color:#aab4c2}
+    .pill.suppressed{background:#2a1d47;color:#c4b5fd}
+  }
+
+  code,.mono{font-family:var(--mono);font-size:12px}
+  .muted{color:var(--muted)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;
+        cursor:pointer;user-select:none;background:var(--bg)}
+  .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  #toast{position:fixed;right:18px;bottom:18px;background:var(--panel);
+         border:1px solid var(--line);border-left:3px solid var(--accent);
+         border-radius:8px;padding:11px 15px;max-width:400px;box-shadow:0 8px 26px rgba(0,0,0,.13);
+         opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none;font-size:13px;z-index:50}
+  #toast.show{opacity:1;transform:none}
+  #toast.err{border-left-color:var(--bad)}
+
+  dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);
+         padding:0;max-width:760px;width:92vw}
+  dialog::backdrop{background:rgba(0,0,0,.45)}
+  .dlg-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;
+            justify-content:space-between;align-items:center;gap:10px}
+  .dlg-body{padding:18px;max-height:66vh;overflow:auto}
+  pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;
+      overflow:auto;font-size:12px;margin:0}
+  .banner{background:var(--accent-soft);border:1px solid var(--line);border-radius:8px;
+          padding:11px 14px;font-size:13px;margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="dot" id="health"></span> Pulse</div>
+  <input id="apiKey" placeholder="API key — pk_live_… or pk_test_…" autocomplete="off" spellcheck="false">
+  <button class="ghost" id="useDemo">Use demo key</button>
+</header>
+
+<div class="wrap">
+  <nav>
+    <button data-tab="send" class="on">Send</button>
+    <button data-tab="log">Delivery log</button>
+    <button data-tab="templates">Templates</button>
+    <button data-tab="subscribers">Subscribers</button>
+    <button data-tab="inbox">Inbox</button>
+    <button data-tab="usage">Usage</button>
+  </nav>
+
+  <!-- ── SEND ───────────────────────────────────────────── -->
+  <section data-panel="send">
+    <div class="card">
+      <h2>Send a notification</h2>
+      <p class="sub">This is the one call your app makes. Leave channels unselected to use every channel the template defines.</p>
+
+      <div class="row">
+        <div class="field">
+          <label>Recipient by</label>
+          <select id="toKind">
+            <option value="subscriberId">Subscriber ID</option>
+            <option value="externalId">Your user ID (externalId)</option>
+            <option value="email">Email address (ad-hoc)</option>
+            <option value="phone">Phone number (ad-hoc)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Value</label>
+          <input id="toValue" placeholder="sub_… / user-42 / a@b.com">
+        </div>
+        <div class="field">
+          <label>Template</label>
+          <select id="tplPick"><option value="">— inline content —</option></select>
+        </div>
+        <div class="field">
+          <label>Locale</label>
+          <select id="locale">
+            <option value="">auto (subscriber's)</option>
+            <option value="en">en</option>
+            <option value="bn">bn</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Channels (none = all the template defines)</label>
+          <div class="chips" id="chChips">
+            <span class="chip" data-ch="email">email</span>
+            <span class="chip" data-ch="push">push</span>
+            <span class="chip" data-ch="sms">sms</span>
+            <span class="chip" data-ch="inapp">inapp</span>
+            <span class="chip" data-ch="webhook">webhook</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Send at (blank = now)</label>
+          <input id="sendAt" type="datetime-local">
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:12px">
+        <label>Data — the variables your template renders</label>
+        <textarea id="data">{
+  "product": { "name": "Premium Basmati Rice 5kg", "price": 620 },
+  "group":   { "id": "9931" },
+  "order":   { "eta": "Sunday" }
+}</textarea>
+      </div>
+
+      <div class="actions">
+        <button class="act" id="sendBtn">Send</button>
+        <label style="display:flex;gap:6px;align-items:center;text-transform:none;
+                      letter-spacing:0;font-weight:500;color:var(--ink);margin:0">
+          <input type="checkbox" id="useIdem" style="width:auto" checked> use an Idempotency-Key
+        </label>
+      </div>
+    </div>
+    <div class="card" id="sendResult" style="display:none"></div>
+  </section>
+
+  <!-- ── DELIVERY LOG ───────────────────────────────────── -->
+  <section data-panel="log" hidden>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div><h2>Delivery log</h2><p class="sub" style="margin:0">Newest first. Click a row for per-channel detail.</p></div>
+        <div class="actions">
+          <label style="display:flex;gap:6px;align-items:center;text-transform:none;
+                        letter-spacing:0;font-weight:500;color:var(--ink);margin:0">
+            <input type="checkbox" id="autoRefresh" style="width:auto"> auto-refresh
+          </label>
+          <button class="ghost" onclick="loadLog()">Refresh</button>
+        </div>
+      </div>
+      <div id="logTable"><div class="empty">Nothing yet — send something.</div></div>
+    </div>
+  </section>
+
+  <!-- ── TEMPLATES ──────────────────────────────────────── -->
+  <section data-panel="templates" hidden>
+    <div class="card">
+      <h2>Templates</h2>
+      <p class="sub">Append-only: publishing an edit creates the next version, so an in-flight message can't change.</p>
+      <div id="tplTable"><div class="empty">No templates yet.</div></div>
+    </div>
+    <div class="card">
+      <h2>Publish a template</h2>
+      <p class="sub"><code>locales.en</code> is required — it's the per-channel fallback for every other language. Bodies are Liquid: <code>{{ product.name }}</code>.</p>
+      <div class="row">
+        <div class="field"><label>Key</label><input id="tplKey" placeholder="group-filled"></div>
+        <div class="field"><label>Name</label><input id="tplName" placeholder="Group buy filled"></div>
+        <div class="field"><label>Category</label><input id="tplCat" placeholder="transactional" value="transactional"></div>
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>Locales</label>
+        <textarea id="tplLocales" style="min-height:230px"></textarea>
+      </div>
+      <button class="act" id="tplBtn">Publish</button>
+    </div>
+  </section>
+
+  <!-- ── SUBSCRIBERS ────────────────────────────────────── -->
+  <section data-panel="subscribers" hidden>
+    <div class="card">
+      <h2>Add or update a subscriber</h2>
+      <p class="sub">Matched by subscriber ID, then by your own <code>externalId</code>. Preferences are never reset by an upsert. BD phone formats are normalised to E.164.</p>
+      <div class="row">
+        <div class="field"><label>Your user ID</label><input id="sExt" placeholder="sd-user-8821"></div>
+        <div class="field"><label>Email</label><input id="sEmail" placeholder="omer@example.com"></div>
+        <div class="field"><label>Phone</label><input id="sPhone" placeholder="01712345678"></div>
+        <div class="field"><label>Locale</label>
+          <select id="sLocale"><option value="en">en</option><option value="bn">bn</option></select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Name</label><input id="sName" placeholder="Omer"></div>
+        <div class="field"><label>Topics (comma separated)</label><input id="sTopics" placeholder="dhaka-buyers"></div>
+      </div>
+      <button class="act" id="subBtn">Save subscriber</button>
+    </div>
+
+    <div class="card">
+      <h2>Look one up</h2>
+      <p class="sub">Fetch by subscriber ID to see preferences and registered devices.</p>
+      <div class="row">
+        <div class="field"><label>Subscriber ID</label><input id="lookupId" placeholder="sub_…"></div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button class="act" id="lookupBtn">Look up</button>
+        </div>
+      </div>
+      <div id="lookupOut"></div>
+    </div>
+  </section>
+
+  <!-- ── INBOX ──────────────────────────────────────────── -->
+  <section data-panel="inbox" hidden>
+    <div class="card">
+      <h2>In-app inbox</h2>
+      <p class="sub">Exactly what your mobile app's notification bell would render.</p>
+      <div class="row">
+        <div class="field"><label>Subscriber ID</label><input id="inboxSub" placeholder="sub_…"></div>
+        <div class="field" style="display:flex;align-items:flex-end;gap:8px">
+          <button class="act" id="inboxBtn">Load</button>
+          <button class="ghost" id="readAllBtn">Mark all read</button>
+        </div>
+      </div>
+      <div id="inboxOut"><div class="empty">Enter a subscriber ID.</div></div>
+    </div>
+  </section>
+
+  <!-- ── USAGE ──────────────────────────────────────────── -->
+  <section data-panel="usage" hidden>
+    <div class="card">
+      <h2>Usage this period</h2>
+      <p class="sub">One unit per message, not per channel. The breakdown shows channel deliveries.</p>
+      <div id="usageOut"><div class="empty">Loading…</div></div>
+    </div>
+  </section>
+</div>
+
+<dialog id="dlg">
+  <div class="dlg-head"><strong id="dlgTitle">Message</strong>
+    <button class="ghost" onclick="document.getElementById('dlg').close()">Close</button></div>
+  <div class="dlg-body" id="dlgBody"></div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+const DEMO_KEY = 'pk_test_00000000000000000000000000000000000000000000000000000000demo';
+const $ = (id) => document.getElementById(id);
+const keyEl = $('apiKey');
+keyEl.value = localStorage.getItem('pulse.key') || '';
+keyEl.addEventListener('change', () => {
+  localStorage.setItem('pulse.key', keyEl.value.trim());
+  refreshAll();
+});
+$('useDemo').onclick = () => {
+  keyEl.value = DEMO_KEY;
+  localStorage.setItem('pulse.key', DEMO_KEY);
+  refreshAll();
+};
+
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => (t.className = ''), 4200);
+}
+
+/** Every call goes through here so auth and the error envelope are handled once. */
+async function api(path, opts = {}) {
+  const key = keyEl.value.trim();
+  if (!key) throw new Error('Set an API key first (top bar).');
+  const res = await fetch(path, {
+    ...opts,
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Bearer ' + key,
+      ...(opts.headers || {}),
+    },
+  });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    // The API always returns { error: { code, message } } — surface the code,
+    // because that is the part that is stable and worth acting on.
+    const e = body && body.error;
+    throw new Error(e ? `${e.code}: ${e.message}` : `HTTP ${res.status}`);
+  }
+  return body;
+}
+
+// ── tabs ───────────────────────────────────────────────
+document.querySelectorAll('nav button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('nav button').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    const tab = b.dataset.tab;
+    document.querySelectorAll('[data-panel]').forEach((p) => (p.hidden = p.dataset.panel !== tab));
+    if (tab === 'log') loadLog();
+    if (tab === 'templates') loadTemplates();
+    if (tab === 'usage') loadUsage();
+  };
+});
+
+// ── health ─────────────────────────────────────────────
+async function health() {
+  try {
+    const h = await (await fetch('/healthz')).json();
+    $('health').className = 'dot ' + (h.status === 'ok' ? 'up' : 'down');
+  } catch {
+    $('health').className = 'dot down';
+  }
+}
+
+// ── channel chips ──────────────────────────────────────
+document.querySelectorAll('#chChips .chip').forEach((c) => {
+  c.onclick = () => c.classList.toggle('on');
+});
+const pickedChannels = () =>
+  [...document.querySelectorAll('#chChips .chip.on')].map((c) => c.dataset.ch);
+
+// ── send ───────────────────────────────────────────────
+$('sendBtn').onclick = async () => {
+  const btn = $('sendBtn');
+  btn.disabled = true;
+  try {
+    let data;
+    try {
+      data = JSON.parse($('data').value || '{}');
+    } catch (e) {
+      throw new Error('Data is not valid JSON — ' + e.message);
+    }
+
+    const val = $('toValue').value.trim();
+    if (!val) throw new Error('Enter a recipient value.');
+
+    const body = { to: { [$('toKind').value]: val }, data };
+    const tpl = $('tplPick').value;
+    if (tpl) body.templateKey = tpl;
+    else
+      body.content = {
+        email: { subject: 'Test from Pulse', html: '<p>It works.</p>' },
+        inapp: { title: 'Test from Pulse', body: 'It works.' },
+      };
+
+    const chs = pickedChannels();
+    if (chs.length) body.channels = chs;
+    if ($('locale').value) body.locale = $('locale').value;
+    if ($('sendAt').value) body.sendAt = new Date($('sendAt').value).toISOString();
+
+    const headers = {};
+    if ($('useIdem').checked) headers['idempotency-key'] = 'console-' + Date.now();
+
+    const out = await api('/v1/notifications', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const box = $('sendResult');
+    box.style.display = '';
+    box.innerHTML =
+      `<h2>Accepted <span class="pill ${out.status}">${out.status}</span></h2>
+       <p class="sub">Message <code>${out.messageId}</code> — channels: ${out.channels.join(', ') || 'none'}</p>
+       <div class="actions">
+         <button class="ghost" onclick="showMessage('${out.messageId}')">See per-channel result</button>
+         <a class="ghost" style="text-decoration:none;padding:7px 13px" href="http://localhost:8125" target="_blank">Open MailHog</a>
+       </div>`;
+    toast('Sent — ' + out.messageId);
+
+    // Results land a moment later, once the workers pick the jobs up.
+    setTimeout(() => showMessage(out.messageId), 2500);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// ── delivery log ───────────────────────────────────────
+async function loadLog() {
+  try {
+    const page = await api('/v1/notifications?limit=40');
+    const rows = page.data;
+    if (!rows.length) {
+      $('logTable').innerHTML = '<div class="empty">Nothing yet — send something.</div>';
+      return;
+    }
+    $('logTable').innerHTML =
+      `<table><thead><tr><th>When</th><th>Status</th><th>Template</th>
+       <th>Channels</th><th>Message</th></tr></thead><tbody>` +
+      rows
+        .map(
+          (m) => `<tr class="clickable" onclick="showMessage('${m.messageId}')">
+            <td class="muted">${new Date(m.createdAt).toLocaleTimeString()}</td>
+            <td><span class="pill ${m.status}">${m.status}</span></td>
+            <td>${m.templateKey || '<span class="muted">inline</span>'}</td>
+            <td class="muted">${(m.channels || []).join(', ')}</td>
+            <td class="mono muted">${m.messageId.slice(-12)}</td></tr>`,
+        )
+        .join('') +
+      '</tbody></table>';
+  } catch (e) {
+    $('logTable').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+let autoTimer;
+$('autoRefresh').onchange = (e) => {
+  clearInterval(autoTimer);
+  if (e.target.checked) autoTimer = setInterval(loadLog, 3000);
+};
+
+async function showMessage(id) {
+  try {
+    const m = await api('/v1/notifications/' + id);
+    $('dlgTitle').textContent = 'Message ' + id.slice(-12);
+    const results = Object.values(m.results || {});
+    $('dlgBody').innerHTML =
+      `<p><span class="pill ${m.status}">${m.status}</span>
+         <span class="muted"> locale ${m.locale} · ${m.templateKey || 'inline'}
+         ${m.scheduledFor ? ' · scheduled ' + new Date(m.scheduledFor).toLocaleString() : ''}</span></p>
+       <table><thead><tr><th>Channel</th><th>Status</th><th>Detail</th></tr></thead><tbody>` +
+      (results.length
+        ? results
+            .map(
+              (r) => `<tr><td>${r.channel}</td>
+                <td><span class="pill ${r.status}">${r.status}</span></td>
+                <td class="muted">${r.error || r.reason || r.providerMessageId || ''}</td></tr>`,
+            )
+            .join('')
+        : '<tr><td colspan="3" class="muted">Still in flight…</td></tr>') +
+      `</tbody></table>
+       <p class="muted" style="margin:16px 0 6px">Rendered content (frozen when accepted)</p>
+       <pre>${escapeHtml(JSON.stringify(m.rendered, null, 2))}</pre>
+       <p class="muted" style="margin:16px 0 6px">Attempts (${(m.attempts || []).length})</p>
+       <pre>${escapeHtml(
+         (m.attempts || [])
+           .map((a) => `${a.at}  ${a.channel}  ${a.status}  ${a.error || ''}`)
+           .join('\n') || 'none',
+       )}</pre>`;
+    $('dlg').showModal();
+  } catch (e) {
+    toast(e.message, true);
+  }
+}
+
+// ── templates ──────────────────────────────────────────
+async function loadTemplates() {
+  try {
+    const list = await api('/v1/templates');
+    const pick = $('tplPick');
+    const current = pick.value;
+    pick.innerHTML =
+      '<option value="">— inline content —</option>' +
+      list.map((t) => `<option value="${t.key}">${t.key} (v${t.version})</option>`).join('');
+    pick.value = current;
+
+    $('tplTable').innerHTML = list.length
+      ? `<table><thead><tr><th>Key</th><th>Name</th><th>Version</th>
+         <th>Category</th><th>Channels</th><th>Locales</th></tr></thead><tbody>` +
+        list
+          .map((t) => {
+            const chans = new Set();
+            Object.values(t.locales).forEach((l) => Object.keys(l).forEach((c) => chans.add(c)));
+            return `<tr><td class="mono">${t.key}</td><td>${t.name}</td>
+              <td>v${t.version}</td><td class="muted">${t.category}</td>
+              <td class="muted">${[...chans].join(', ')}</td>
+              <td class="muted">${Object.keys(t.locales).join(', ')}</td></tr>`;
+          })
+          .join('') +
+        '</tbody></table>'
+      : '<div class="empty">No templates yet — publish one below.</div>';
+  } catch (e) {
+    $('tplTable').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+$('tplBtn').onclick = async () => {
+  try {
+    const locales = JSON.parse($('tplLocales').value);
+    if (!locales.en) throw new Error('locales.en is required — it is the fallback.');
+    const t = await api('/v1/templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        key: $('tplKey').value.trim(),
+        name: $('tplName').value.trim() || $('tplKey').value.trim(),
+        category: $('tplCat').value.trim() || 'transactional',
+        locales,
+      }),
+    });
+    toast(`Published ${t.key} v${t.version}`);
+    loadTemplates();
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+
+$('tplLocales').value = JSON.stringify(
+  {
+    en: {
+      email: { subject: 'Hello {{ name }}', html: '<p>Hi {{ name }}, welcome.</p>' },
+      push: { title: 'Welcome', body: 'Hi {{ name }}' },
+      sms: { text: 'Hi {{ name }}, welcome.' },
+      inapp: { title: 'Welcome', body: 'Hi {{ name }}', deeplink: '/home' },
+    },
+    bn: {
+      email: { subject: 'স্বাগতম {{ name }}', html: '<p>প্রিয় {{ name }}, স্বাগতম।</p>' },
+      push: { title: 'স্বাগতম', body: 'প্রিয় {{ name }}' },
+      inapp: { title: 'স্বাগতম', body: 'প্রিয় {{ name }}', deeplink: '/home' },
+    },
+  },
+  null,
+  2,
+);
+
+// ── subscribers ────────────────────────────────────────
+$('subBtn').onclick = async () => {
+  try {
+    const body = {
+      externalId: $('sExt').value.trim() || undefined,
+      email: $('sEmail').value.trim() || undefined,
+      phone: $('sPhone').value.trim() || undefined,
+      locale: $('sLocale').value,
+      attributes: $('sName').value.trim() ? { name: $('sName').value.trim() } : undefined,
+      topics: $('sTopics').value.trim()
+        ? $('sTopics').value.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined,
+    };
+    const s = await api('/v1/subscribers', { method: 'POST', body: JSON.stringify(body) });
+    $('lookupId').value = s.subscriberId;
+    $('inboxSub').value = s.subscriberId;
+    $('toValue').value = s.subscriberId;
+    $('toKind').value = 'subscriberId';
+    toast('Saved — ' + s.subscriberId + (s.phone ? ' · ' + s.phone : ''));
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+
+$('lookupBtn').onclick = async () => {
+  try {
+    const id = $('lookupId').value.trim();
+    const s = await api('/v1/subscribers/' + id);
+    let devices = [];
+    try {
+      devices = await api(`/v1/subscribers/${id}/devices`);
+    } catch {
+      /* the key may lack subscribers:read for devices */
+    }
+    $('lookupOut').innerHTML =
+      `<p class="muted" style="margin:14px 0 6px">Profile</p>
+       <pre>${escapeHtml(JSON.stringify(s, null, 2))}</pre>
+       <p class="muted" style="margin:14px 0 6px">Devices (${devices.length})</p>
+       <pre>${escapeHtml(JSON.stringify(devices, null, 2))}</pre>`;
+  } catch (e) {
+    $('lookupOut').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+};
+
+// ── inbox ──────────────────────────────────────────────
+$('inboxBtn').onclick = loadInbox;
+async function loadInbox() {
+  const id = $('inboxSub').value.trim();
+  if (!id) return toast('Enter a subscriber ID.', true);
+  try {
+    const d = await api('/v1/inbox?subscriberId=' + encodeURIComponent(id));
+    $('inboxOut').innerHTML = d.data.length
+      ? `<p class="muted">Unread: <strong>${d.unreadCount}</strong></p>
+         <table><thead><tr><th></th><th>Title</th><th>Body</th>
+         <th>Deeplink</th><th>When</th></tr></thead><tbody>` +
+        d.data
+          .map(
+            (i) => `<tr><td>${i.readAt ? '' : '<span style="color:var(--accent)">●</span>'}</td>
+              <td><strong>${escapeHtml(i.title)}</strong></td>
+              <td>${escapeHtml(i.body)}</td>
+              <td class="mono muted">${i.deeplink || ''}</td>
+              <td class="muted">${new Date(i.createdAt).toLocaleTimeString()}</td></tr>`,
+          )
+          .join('') +
+        '</tbody></table>'
+      : '<div class="empty">Inbox is empty.</div>';
+  } catch (e) {
+    $('inboxOut').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+$('readAllBtn').onclick = async () => {
+  try {
+    const id = $('inboxSub').value.trim();
+    const r = await api('/v1/inbox/read-all?subscriberId=' + encodeURIComponent(id), {
+      method: 'POST',
+    });
+    toast(`Marked ${r.marked} read`);
+    loadInbox();
+  } catch (e) {
+    toast(e.message, true);
+  }
+};
+
+// ── usage ──────────────────────────────────────────────
+async function loadUsage() {
+  try {
+    const u = await api('/v1/usage');
+    const pct = u.quota ? Math.min(100, (u.sent / u.quota) * 100) : 0;
+    $('usageOut').innerHTML = `
+      <div class="row">
+        <div><label>Period</label><div>${u.period}</div></div>
+        <div><label>Plan</label><div>${u.plan}</div></div>
+        <div><label>Sent</label><div><strong>${u.sent.toLocaleString()}</strong></div></div>
+        <div><label>Remaining</label><div>${u.remaining.toLocaleString()} of ${u.quota.toLocaleString()}</div></div>
+      </div>
+      <div style="height:7px;background:var(--bg);border:1px solid var(--line);
+                  border-radius:99px;overflow:hidden;margin:6px 0 16px">
+        <div style="width:${pct}%;height:100%;background:var(--accent)"></div>
+      </div>
+      <p class="muted" style="margin:0 0 6px">Channel deliveries</p>
+      <table><tbody>${
+        Object.entries(u.byChannel).length
+          ? Object.entries(u.byChannel)
+              .map(([c, n]) => `<tr><td>${c}</td><td><strong>${n}</strong></td></tr>`)
+              .join('')
+          : '<tr><td class="muted">none yet</td></tr>'
+      }</tbody></table>`;
+  } catch (e) {
+    $('usageOut').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+}
+
+function refreshAll() {
+  if (!keyEl.value.trim()) return;
+  loadTemplates();
+  loadLog();
+  loadUsage();
+}
+
+health();
+setInterval(health, 15000);
+refreshAll();
+</script>
+</body>
+</html>

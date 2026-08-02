@@ -137,9 +137,10 @@ infra/lib/            CDK: data-stack, queues-stack, compute-stack
 | 3 channel workers + bounce handler | done, verified end to end |
 | 4 SMS adapter, scheduling, broadcast | done |
 | 5 CDK, CI, docs, e2e | done, 28 e2e green, synth clean |
+| 5b operator console (`GET /console`) | done — zero-build single file at `packages/api/public/console.html` |
 | 6 Node SDK | not started |
 | 7 Flutter SDK | not started |
-| 8 Angular admin console | not started |
+| 8 Angular admin console | superseded for now by the zero-build console above |
 
 **Not deployed.** No AWS credentials on this machine. `docs/runbooks/deploy.md`
 has the full sequence; SES sandbox exit is the long pole (24–48h).

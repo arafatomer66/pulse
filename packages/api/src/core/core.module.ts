@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { ConsoleController } from './console.controller';
 import { HealthController } from './health.controller';
 import { PulseService } from './pulse.service';
 
@@ -8,7 +9,7 @@ import { PulseService } from './pulse.service';
  */
 @Global()
 @Module({
-  controllers: [HealthController],
+  controllers: [HealthController, ConsoleController],
   providers: [PulseService],
   exports: [PulseService],
 })

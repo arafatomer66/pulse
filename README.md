@@ -54,6 +54,10 @@ pnpm seed                 # demo tenant + API key + bilingual templates
 pnpm dev                  # API on :3100 + workers, in parallel
 ```
 
+Then open **<http://localhost:3100/console>** and click *Use demo key*. That's a
+full operator UI — send notifications, watch the delivery log, edit templates,
+manage subscribers, read the in-app inbox, check usage. No build step.
+
 Then send something:
 
 ```bash
