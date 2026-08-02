@@ -109,6 +109,7 @@ everything. Full breakdown in [docs/COSTS.md](docs/COSTS.md).
 
 ## Docs
 
+- **[How to use Pulse](docs/guide.html)** — start here; open it in a browser
 - [Architecture](docs/ARCHITECTURE.md) — the shape and the reasoning behind it
 - [API reference](docs/openapi.yaml) — OpenAPI 3.1
 - [Costs](docs/COSTS.md)

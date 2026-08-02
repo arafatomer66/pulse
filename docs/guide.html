@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pulse — How to use it</title>
+
+<style>
+  /* ── tokens ───────────────────────────────────────────────
+     Neutrals carry a faint blue-green cast, biased toward the
+     teal accent the console already uses, so the guide and the
+     product read as one thing. */
+  :root{
+    --ground:#f6f9f9;
+    --panel:#ffffff;
+    --sunk:#eef3f3;
+    --ink:#0f171a;
+    --ink-2:#31454b;
+    --muted:#5f7378;
+    --line:#dbe5e6;
+    --line-soft:#e9efef;
+    --accent:#0d7469;
+    --accent-ink:#0a5b52;
+    --accent-wash:#e2f1ef;
+    --ok:#0f766e;   --ok-bg:#dcf2ec;   --ok-ink:#0b4f47;
+    --warn:#9a5b06; --warn-bg:#fbeed6; --warn-ink:#7a4705;
+    --bad:#a92222;  --bad-bg:#fbe1e1;  --bad-ink:#851b1b;
+    --hold:#3b4c8f; --hold-bg:#e2e6f7; --hold-ink:#2c3a70;
+
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+
+    --measure:68ch;
+    --r:10px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#0b1113; --panel:#121a1c; --sunk:#0e1618;
+      --ink:#e7eeef; --ink-2:#b9cacd; --muted:#8ba0a4;
+      --line:#202c2f; --line-soft:#1a2426;
+      --accent:#3ad0bd; --accent-ink:#6fe0d1; --accent-wash:#0f2a28;
+      --ok:#3ad0bd;   --ok-bg:#0d2a26;   --ok-ink:#7ee5d6;
+      --warn:#e3a44b; --warn-bg:#33240d; --warn-ink:#f0c27f;
+      --bad:#ef8080;  --bad-bg:#331616;  --bad-ink:#f6adad;
+      --hold:#93a4ec; --hold-bg:#191e33; --hold-ink:#b7c3f5;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0b1113; --panel:#121a1c; --sunk:#0e1618;
+    --ink:#e7eeef; --ink-2:#b9cacd; --muted:#8ba0a4;
+    --line:#202c2f; --line-soft:#1a2426;
+    --accent:#3ad0bd; --accent-ink:#6fe0d1; --accent-wash:#0f2a28;
+    --ok:#3ad0bd;   --ok-bg:#0d2a26;   --ok-ink:#7ee5d6;
+    --warn:#e3a44b; --warn-bg:#33240d; --warn-ink:#f0c27f;
+    --bad:#ef8080;  --bad-bg:#331616;  --bad-ink:#f6adad;
+    --hold:#93a4ec; --hold-bg:#191e33; --hold-ink:#b7c3f5;
+  }
+  :root[data-theme="light"]{
+    --ground:#f6f9f9; --panel:#ffffff; --sunk:#eef3f3;
+    --ink:#0f171a; --ink-2:#31454b; --muted:#5f7378;
+    --line:#dbe5e6; --line-soft:#e9efef;
+    --accent:#0d7469; --accent-ink:#0a5b52; --accent-wash:#e2f1ef;
+    --ok:#0f766e;   --ok-bg:#dcf2ec;   --ok-ink:#0b4f47;
+    --warn:#9a5b06; --warn-bg:#fbeed6; --warn-ink:#7a4705;
+    --bad:#a92222;  --bad-bg:#fbe1e1;  --bad-ink:#851b1b;
+    --hold:#3b4c8f; --hold-bg:#e2e6f7; --hold-ink:#2c3a70;
+  }
+
+  html{scroll-behavior:smooth;scroll-padding-top:1.5rem}
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *{animation:none!important;transition:none!important} }
+
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:var(--sans);font-size:16px;line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── shell ───────────────────────────────────────────── */
+  .shell{max-width:1180px;margin:0 auto;padding:0 24px;
+         display:grid;grid-template-columns:1fr;gap:0}
+  @media (min-width:1000px){
+    .shell{grid-template-columns:216px minmax(0,1fr);gap:56px;padding:0 32px}
+  }
+
+  /* ── masthead ────────────────────────────────────────── */
+  .masthead{grid-column:1/-1;padding:56px 0 34px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;
+           text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+  .masthead h1{
+    margin:0 0 12px;font-size:clamp(2.1rem,5vw,3.1rem);line-height:1.06;
+    letter-spacing:-.028em;font-weight:800;text-wrap:balance;
+  }
+  .masthead .lede{margin:0;max-width:60ch;font-size:1.06rem;color:var(--ink-2)}
+  .masthead .lede strong{color:var(--ink);font-weight:600}
+
+  .runline{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+  .runline a, .runline span{
+    font-family:var(--mono);font-size:12.5px;border:1px solid var(--line);
+    background:var(--panel);border-radius:99px;padding:6px 13px;color:var(--ink-2);
+    text-decoration:none;display:inline-flex;align-items:center;gap:7px;
+  }
+  .runline a:hover{border-color:var(--accent);color:var(--accent)}
+  .runline a:focus-visible,.toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+
+  /* ── toc ─────────────────────────────────────────────── */
+  .toc{display:none}
+  @media (min-width:1000px){
+    .toc{display:block;padding:40px 0 80px;align-self:start;position:sticky;top:0;
+         max-height:100vh;overflow-y:auto}
+  }
+  .toc p{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+         text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+  .toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+  .toc a{display:block;padding:5px 10px;border-radius:6px;font-size:13.5px;
+         color:var(--muted);text-decoration:none;border-left:2px solid transparent}
+  .toc a:hover{color:var(--ink);background:var(--sunk)}
+  .toc a.on{color:var(--accent);border-left-color:var(--accent);
+            background:var(--accent-wash);font-weight:600}
+
+  /* ── main ────────────────────────────────────────────── */
+  main{padding:40px 0 100px;min-width:0}
+  section{padding-top:14px;margin-bottom:52px;scroll-margin-top:20px}
+  section > h2{
+    margin:0 0 6px;font-size:1.6rem;letter-spacing:-.02em;font-weight:750;
+    text-wrap:balance;
+  }
+  section > .kicker{
+    font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 8px;
+  }
+  h3{margin:34px 0 8px;font-size:1.06rem;font-weight:700;letter-spacing:-.01em}
+  h4{margin:22px 0 6px;font-size:.95rem;font-weight:700;color:var(--ink-2)}
+  p{margin:0 0 14px;max-width:var(--measure);color:var(--ink-2)}
+  p strong{color:var(--ink);font-weight:600}
+  ul,ol{max-width:var(--measure);color:var(--ink-2);padding-left:22px;margin:0 0 14px}
+  li{margin-bottom:6px}
+  li::marker{color:var(--muted)}
+  a{color:var(--accent);text-underline-offset:2px}
+
+  code{font-family:var(--mono);font-size:.86em;background:var(--sunk);
+       border:1px solid var(--line-soft);border-radius:5px;padding:1px 5px;color:var(--ink)}
+  pre{margin:0 0 16px;background:var(--panel);border:1px solid var(--line);
+      border-radius:var(--r);padding:15px 17px;overflow-x:auto}
+  pre code{background:none;border:0;padding:0;font-size:12.8px;line-height:1.62;display:block}
+  .cmt{color:var(--muted)}
+  .str{color:var(--accent-ink)}
+  .kw{color:var(--hold)}
+
+  figure{margin:0 0 18px}
+  figcaption{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+             color:var(--muted);margin:0 0 7px}
+
+  /* ── numbered walkthrough — the only place numbering is
+       used, because these really are ordered steps ─────── */
+  .steps{list-style:none;padding:0;margin:0 0 20px;max-width:var(--measure);
+         display:flex;flex-direction:column;gap:0}
+  .steps li{position:relative;padding:0 0 22px 46px;margin:0;
+            border-left:1px solid var(--line);}
+  .steps li:last-child{border-left-color:transparent;padding-bottom:0}
+  .steps li::before{
+    content:counter(step);counter-increment:step;
+    position:absolute;left:-14px;top:-2px;width:28px;height:28px;border-radius:50%;
+    background:var(--accent);color:#fff;font-family:var(--mono);font-size:12px;
+    font-weight:700;display:grid;place-items:center;
+  }
+  .steps{counter-reset:step}
+  .steps li h4{margin:2px 0 5px;font-size:1rem;color:var(--ink)}
+  .steps li p{margin-bottom:8px}
+
+  /* ── tables ──────────────────────────────────────────── */
+  .tw{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);
+      border-radius:var(--r);background:var(--panel)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+     text-transform:uppercase;color:var(--muted);font-weight:600;
+     padding:11px 15px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:11px 15px;border-bottom:1px solid var(--line-soft);
+     vertical-align:top;color:var(--ink-2)}
+  tr:last-child td{border-bottom:0}
+  td strong{color:var(--ink)}
+  td code{white-space:nowrap}
+
+  /* ── status pills — same vocabulary the API returns ──── */
+  .pill{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+        letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;
+        white-space:nowrap}
+  .pill.ok{background:var(--ok-bg);color:var(--ok-ink)}
+  .pill.bad{background:var(--bad-bg);color:var(--bad-ink)}
+  .pill.warn{background:var(--warn-bg);color:var(--warn-ink)}
+  .pill.hold{background:var(--hold-bg);color:var(--hold-ink)}
+  .pill.mute{background:var(--sunk);color:var(--muted)}
+
+  /* ── channel chips — the domain's core taxonomy ──────── */
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px}
+  .chip{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);
+        background:var(--panel);border-radius:99px;padding:4px 11px;color:var(--ink-2)}
+
+  /* ── callout ─────────────────────────────────────────── */
+  .note{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);
+        padding:14px 17px;margin:0 0 18px;max-width:var(--measure)}
+  .note.key{border-color:var(--accent);background:var(--accent-wash)}
+  .note p:last-child{margin-bottom:0}
+  .note .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;
+             text-transform:uppercase;color:var(--accent);display:block;margin-bottom:5px}
+  .note.trap .tag{color:var(--warn-ink)}
+  .note.trap{border-color:var(--warn);background:var(--warn-bg)}
+  .note.trap p{color:var(--warn-ink)}
+
+  /* ── two-up ──────────────────────────────────────────── */
+  .duo{display:grid;gap:16px;margin:0 0 18px}
+  @media (min-width:760px){ .duo{grid-template-columns:1fr 1fr} }
+  .duo > div{border:1px solid var(--line);background:var(--panel);
+             border-radius:var(--r);padding:15px 17px}
+  .duo h4{margin:0 0 6px}
+  .duo p{margin:0;font-size:14px}
+
+  footer{grid-column:1/-1;border-top:1px solid var(--line);padding:26px 0 60px;
+         color:var(--muted);font-size:13.5px}
+  footer p{color:var(--muted);max-width:var(--measure)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">Pulse · operator guide</p>
+    <h1>Send a notification without writing the plumbing</h1>
+    <p class="lede">Pulse takes one HTTP call and delivers it over <strong>email, push, SMS,
+      an in-app inbox and webhooks</strong> — rendering the template in the right language,
+      respecting the person's opt-outs, retrying what fails, and logging every attempt.
+      This guide gets you from a cold machine to a delivered message.</p>
+    <div class="runline">
+      <a href="http://localhost:3100/console"><span class="live"></span>Console — localhost:3100/console</a>
+      <a href="http://localhost:8125">MailHog — localhost:8125</a>
+      <span>~/Desktop/pulse</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Contents">
+    <p>Contents</p>
+    <ol>
+      <li><a href="#start">Start it up</a></li>
+      <li><a href="#console">The console</a></li>
+      <li><a href="#first">Your first send</a></li>
+      <li><a href="#model">How it thinks</a></li>
+      <li><a href="#templates">Templates</a></li>
+      <li><a href="#results">Reading results</a></li>
+      <li><a href="#code">From your code</a></li>
+      <li><a href="#recipes">Recipes</a></li>
+      <li><a href="#prefs">Opt-outs &amp; bounces</a></li>
+      <li><a href="#trouble">When it breaks</a></li>
+      <li><a href="#prod">Going live</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="start">
+      <p class="kicker">One time</p>
+      <h2>Start it up</h2>
+      <p>Three processes: Docker for the local AWS stand-ins, the API, and the delivery
+        workers. You need Node 24, pnpm 11 and Docker running.</p>
+
+<pre><code><span class="cmt"># from ~/Desktop/pulse</span>
+docker compose up -d   <span class="cmt"># DynamoDB :8102 · queues :9324 · MailHog :8125</span>
+pnpm install
+pnpm build
+pnpm seed              <span class="cmt"># demo tenant, API key, two templates</span>
+pnpm dev               <span class="cmt"># API on :3100 + workers, together</span></code></pre>
+
+      <p>Then open <a href="http://localhost:3100/console">localhost:3100/console</a>.
+        The dot next to the wordmark turns green when the API is healthy.</p>
+
+      <div class="note trap">
+        <span class="tag">The one that catches people</span>
+        <p><code>pnpm dev</code> runs <strong>two</strong> things. The API accepts your
+          message; the <em>workers</em> are what actually send it. If a message sits at
+          <span class="pill hold">queued</span> and never moves, the workers aren't running.</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="console">
+      <p class="kicker">The screen</p>
+      <h2>The console</h2>
+      <p>Everything below can be done by hand with <code>curl</code>, but you don't have to.
+        Click <strong>Use demo key</strong> in the top bar and the whole thing fills in.</p>
+
+      <div class="tw"><table>
+        <thead><tr><th>Tab</th><th>What it's for</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Send</strong></td><td>Compose and fire a message. Results appear a couple of seconds later, broken out per channel.</td></tr>
+          <tr><td><strong>Delivery log</strong></td><td>Every message ever sent, newest first. Click a row for per-channel detail, the exact rendered content, and each delivery attempt.</td></tr>
+          <tr><td><strong>Templates</strong></td><td>What exists, and a form to publish new ones. Pre-filled with a working bilingual example.</td></tr>
+          <tr><td><strong>Subscribers</strong></td><td>Add or update a person, then look them up to see their preferences and registered devices.</td></tr>
+          <tr><td><strong>Inbox</strong></td><td>Exactly what your app's notification bell would render for one person.</td></tr>
+          <tr><td><strong>Usage</strong></td><td>Messages sent this month against the plan's quota.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="first">
+      <p class="kicker">Two minutes</p>
+      <h2>Your first send</h2>
+      <p>The demo seed already gave you a tenant, a key, a subscriber and two templates,
+        so you can skip straight to sending.</p>
+
+      <ol class="steps">
+        <li>
+          <h4>Open the console and claim a key</h4>
+          <p>Go to <a href="http://localhost:3100/console">localhost:3100/console</a>
+            and press <strong>Use demo key</strong>. It's stored in your browser, so you
+            only do this once.</p>
+        </li>
+        <li>
+          <h4>Pick who it's going to</h4>
+          <p>On the <strong>Send</strong> tab, leave <em>Recipient by</em> on
+            <code>Subscriber ID</code> and paste the demo one:</p>
+          <pre><code>sub_demo000000000000000000</code></pre>
+        </li>
+        <li>
+          <h4>Pick what to say</h4>
+          <p>Choose <code>order-shipped</code> from the template list. Leave the channel
+            chips unselected — Pulse will use every channel that template defines.
+            Leave the data box as it is.</p>
+        </li>
+        <li>
+          <h4>Send</h4>
+          <p>You get a message ID immediately and the status
+            <span class="pill hold">queued</span>. That means <em>accepted</em>, not
+            <em>delivered</em> — the queues take it from here.</p>
+        </li>
+        <li>
+          <h4>Watch it land</h4>
+          <p>After about two seconds the panel refreshes with a row per channel. Then open
+            <a href="http://localhost:8125">MailHog</a> to read the email that actually
+            left the building, and check the <strong>Inbox</strong> tab for the in-app row.</p>
+        </li>
+      </ol>
+
+      <figure>
+        <figcaption>What you should see</figcaption>
+        <div class="tw"><table>
+          <thead><tr><th>Channel</th><th>Status</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>email</code></td><td><span class="pill ok">delivered</span></td><td>Handed to SMTP — visible in MailHog</td></tr>
+            <tr><td><code>inapp</code></td><td><span class="pill ok">delivered</span></td><td>Row written to the inbox feed</td></tr>
+            <tr><td><code>push</code></td><td><span class="pill ok">delivered</span></td><td>Recorded — FCM isn't wired up locally yet</td></tr>
+            <tr><td><code>sms</code></td><td><span class="pill ok">delivered</span></td><td>Recorded — no SMS gateway locally yet</td></tr>
+          </tbody>
+        </table></div>
+      </figure>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="model">
+      <p class="kicker">The mental model</p>
+      <h2>How it thinks</h2>
+      <p>Four nouns. Once these click, the rest of the API is obvious.</p>
+
+      <h3>Tenant — one per project</h3>
+      <p>ShareDeal Social is a tenant. DevAdda is another. Each gets its own templates,
+        subscribers, quota and delivery log, and <strong>cannot see the others'</strong>.
+        You create tenants with the admin token, not with an API key.</p>
+
+      <h3>API key — how a project authenticates</h3>
+      <p>Sent as <code>Authorization: Bearer pk_live_…</code>. Only a hash is stored, so the
+        key is shown exactly once when you create it and can never be recovered — if you
+        lose it, issue a new one and revoke the old.</p>
+
+      <h3>Subscriber — a person who receives things</h3>
+      <p>Holds their email, phone, language, device tokens and opt-outs.
+        The important field is <code>externalId</code>: <strong>your own user ID</strong>.
+        Set it once, then address people by the ID your database already uses and never
+        store a Pulse ID anywhere.</p>
+      <pre><code><span class="cmt">// address by your ID, not ours</span>
+{ <span class="str">"to"</span>: { <span class="str">"externalId"</span>: <span class="str">"sd-user-8821"</span> } }</code></pre>
+
+      <h3>Template — what to say, on every channel, in every language</h3>
+      <p>One document holds the email, the push, the SMS and the in-app version — in both
+        English and Bengali. You send <em>data</em>; the template decides wording.</p>
+
+      <div class="note key">
+        <span class="tag">The payoff</span>
+        <p>Because the template holds all channels, your app never decides how to notify
+          anyone. Change a template and every future message changes — no deploy.</p>
+      </div>
+
+      <h3>The five channels</h3>
+      <div class="chips">
+        <span class="chip">email</span><span class="chip">push</span><span class="chip">sms</span>
+        <span class="chip">inapp</span><span class="chip">webhook</span>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Channel</th><th>Needs</th><th>Delivered by</th></tr></thead>
+        <tbody>
+          <tr><td><code>email</code></td><td>An email address on the subscriber</td><td>AWS SES, or any SMTP server</td></tr>
+          <tr><td><code>push</code></td><td>At least one registered device token</td><td>Firebase — covers Android, iOS and web</td></tr>
+          <tr><td><code>sms</code></td><td>A phone number</td><td>BulkSMS BD, or AWS SNS</td></tr>
+          <tr><td><code>inapp</code></td><td>Nothing — just the subscriber</td><td>Pulse itself; your app reads the feed</td></tr>
+          <tr><td><code>webhook</code></td><td>A registered endpoint URL</td><td>A signed HTTPS POST to you</td></tr>
+        </tbody>
+      </table></div>
+      <p>You rarely name channels. Omit them and Pulse uses every one the template defines
+        and the person can actually receive on.</p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="templates">
+      <p class="kicker">Writing content</p>
+      <h2>Templates</h2>
+      <p>A template is JSON: one block per language, one entry per channel. Text is Liquid —
+        <code>{{ order.id }}</code> pulls from the data you send.</p>
+
+<pre><code>{
+  <span class="str">"key"</span>: <span class="str">"group-filled"</span>,
+  <span class="str">"name"</span>: <span class="str">"Group buy filled"</span>,
+  <span class="str">"locales"</span>: {
+    <span class="str">"en"</span>: {
+      <span class="str">"email"</span>: { <span class="str">"subject"</span>: <span class="str">"Your group for {{ product.name }} is complete"</span>,
+                  <span class="str">"html"</span>: <span class="str">"&lt;p&gt;Hi {{ subscriber.name }}, filled at ৳{{ product.price }}.&lt;/p&gt;"</span> },
+      <span class="str">"push"</span>:  { <span class="str">"title"</span>: <span class="str">"Group filled!"</span>, <span class="str">"body"</span>: <span class="str">"{{ product.name }} — ৳{{ product.price }}"</span> },
+      <span class="str">"sms"</span>:   { <span class="str">"text"</span>: <span class="str">"Your group for {{ product.name }} is complete."</span> },
+      <span class="str">"inapp"</span>: { <span class="str">"title"</span>: <span class="str">"Group filled"</span>, <span class="str">"body"</span>: <span class="str">"{{ product.name }}"</span>,
+                  <span class="str">"deeplink"</span>: <span class="str">"/groups/{{ group.id }}"</span> }
+    },
+    <span class="str">"bn"</span>: {
+      <span class="str">"email"</span>: { <span class="str">"subject"</span>: <span class="str">"{{ product.name }} এর গ্রুপ সম্পূর্ণ হয়েছে"</span>, <span class="str">"html"</span>: <span class="str">"…"</span> },
+      <span class="str">"push"</span>:  { <span class="str">"title"</span>: <span class="str">"গ্রুপ পূর্ণ!"</span>, <span class="str">"body"</span>: <span class="str">"{{ product.name }}"</span> }
+    }
+  }
+}</code></pre>
+
+      <h3>Three rules worth knowing</h3>
+      <ul>
+        <li><strong>English is the fallback.</strong> <code>locales.en</code> is required.
+          Above, Bengali has no <code>sms</code> — so a Bengali speaker still gets the
+          English SMS rather than no SMS at all.</li>
+        <li><strong>Missing channel means skipped, not broken.</strong> That template has no
+          <code>webhook</code>. Ask for webhook anyway and it comes back
+          <span class="pill mute">skipped</span> while everything else delivers.</li>
+        <li><strong>Editing publishes a new version.</strong> Old versions stay readable, and
+          a message already accepted keeps the wording it was accepted with — an edit can
+          never rewrite something already in flight.</li>
+      </ul>
+
+      <div class="note">
+        <span class="tag">Language</span>
+        <p>You don't pass a language. It comes from the subscriber's <code>locale</code>,
+          so a Bengali user gets Bengali automatically. Pass <code>locale</code> on the send
+          only when you need to override that.</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="results">
+      <p class="kicker">Interpreting</p>
+      <h2>Reading results</h2>
+      <p>Each channel settles independently, then those roll up into one status for the
+        message. The distinction that matters: <strong>not everything that didn't send is a
+        failure.</strong></p>
+
+      <h3>Per channel</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Status</th><th>What happened</th><th>Do you act?</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill ok">delivered</span></td><td>The provider accepted it</td><td>No</td></tr>
+          <tr><td><span class="pill hold">suppressed</span></td><td>They opted out, or the address hard-bounced before. Deliberately not sent</td><td>No — this is correct behaviour</td></tr>
+          <tr><td><span class="pill mute">skipped</span></td><td>Nothing to send on — no phone number, no device, no template body</td><td>Only if you expected them to be reachable</td></tr>
+          <tr><td><span class="pill bad">failed</span></td><td>The provider rejected it after retries</td><td>Yes — read the <code>error</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>The whole message</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Status</th><th>Means</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill hold">queued</span></td><td>Accepted, on its way to the workers</td></tr>
+          <tr><td><span class="pill hold">scheduled</span></td><td>Waiting for its send time. Still cancellable</td></tr>
+          <tr><td><span class="pill mute">processing</span></td><td>Some channels have reported, others haven't</td></tr>
+          <tr><td><span class="pill ok">delivered</span></td><td>Nothing failed</td></tr>
+          <tr><td><span class="pill warn">partial</span></td><td>Some channels landed, some failed</td></tr>
+          <tr><td><span class="pill bad">failed</span></td><td>Every channel failed</td></tr>
+          <tr><td><span class="pill mute">cancelled</span></td><td>You cancelled it before it went</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="note">
+        <span class="tag">Worth internalising</span>
+        <p>A message where every channel was <span class="pill hold">suppressed</span>
+          reports <span class="pill ok">delivered</span>. Pulse did exactly what the
+          person's preferences asked for — that's success, not failure.</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="code">
+      <p class="kicker">Integration</p>
+      <h2>From your code</h2>
+      <p>The console is for operating and debugging. Your app makes one HTTP call.</p>
+
+      <h3>NestJS — a service you write once</h3>
+<pre><code><span class="kw">@Injectable</span>()
+<span class="kw">export class</span> PulseService {
+  <span class="kw">private readonly</span> base = process.env.PULSE_URL!;
+  <span class="kw">private readonly</span> key  = process.env.PULSE_API_KEY!;
+
+  <span class="kw">async</span> notify(input: {
+    userId: string;
+    templateKey: string;
+    data: Record&lt;string, unknown&gt;;
+    channels?: string[];
+    idempotencyKey?: string;
+  }) {
+    <span class="kw">const</span> res = <span class="kw">await</span> fetch(<span class="str">`${this.base}/v1/notifications`</span>, {
+      method: <span class="str">'POST'</span>,
+      headers: {
+        authorization: <span class="str">`Bearer ${this.key}`</span>,
+        <span class="str">'content-type'</span>: <span class="str">'application/json'</span>,
+        <span class="cmt">// reuse your own event id — retries then can't double-send</span>
+        ...(input.idempotencyKey ? { <span class="str">'idempotency-key'</span>: input.idempotencyKey } : {}),
+      },
+      body: JSON.stringify({
+        to: { externalId: input.userId },
+        templateKey: input.templateKey,
+        channels: input.channels,
+        data: input.data,
+      }),
+    });
+    <span class="kw">if</span> (!res.ok) <span class="kw">throw new</span> Error(<span class="str">`pulse ${res.status}: ${await res.text()}`</span>);
+    <span class="kw">return</span> res.json();
+  }
+}</code></pre>
+
+      <p>Then every call site is one line:</p>
+<pre><code><span class="kw">await this</span>.pulse.notify({
+  userId: buyer.id,
+  templateKey: <span class="str">'group-filled'</span>,
+  data: { product, group },
+  idempotencyKey: <span class="str">`group-${group.id}-filled`</span>,
+});</code></pre>
+
+      <h3>Flutter — two things to wire</h3>
+<pre><code><span class="cmt">// 1 — on login, register the device so push can reach them</span>
+<span class="kw">await</span> dio.post(<span class="str">'/v1/subscribers/$subscriberId/devices'</span>, data: {
+  <span class="str">'token'</span>: <span class="kw">await</span> FirebaseMessaging.instance.getToken(),
+  <span class="str">'platform'</span>: Platform.isIOS ? <span class="str">'ios'</span> : <span class="str">'android'</span>,
+});
+
+<span class="cmt">// 2 — the notification bell</span>
+<span class="kw">final</span> res = <span class="kw">await</span> dio.get(<span class="str">'/v1/inbox'</span>,
+    queryParameters: {<span class="str">'subscriberId'</span>: subscriberId});
+
+res.data[<span class="str">'unreadCount'</span>];  <span class="cmt">// the badge</span>
+res.data[<span class="str">'data'</span>];         <span class="cmt">// title, body, deeplink, readAt — newest first</span>
+
+<span class="kw">await</span> dio.post(<span class="str">'/v1/inbox/$itemId/read'</span>,
+    queryParameters: {<span class="str">'subscriberId'</span>: subscriberId});</code></pre>
+
+      <h3>curl — the shape of every call</h3>
+<pre><code>curl -X POST localhost:3100/v1/notifications \
+  -H <span class="str">"Authorization: Bearer $KEY"</span> \
+  -H <span class="str">'content-type: application/json'</span> \
+  -H <span class="str">'Idempotency-Key: group-9931-filled'</span> \
+  -d <span class="str">'{
+    "to": { "externalId": "sd-user-8821" },
+    "templateKey": "group-filled",
+    "data": { "product": { "name": "Basmati Rice 5kg", "price": 620 },
+              "group": { "id": "9931" } }
+  }'</span></code></pre>
+
+      <div class="note key">
+        <span class="tag">Always send an Idempotency-Key</span>
+        <p>Use an ID from your own domain — <code>group-9931-filled</code>,
+          <code>order-1001-shipped</code>. Retry the same call and Pulse returns the original
+          result and sends nothing. Without it, a retried webhook or a double-tap sends twice.</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="recipes">
+      <p class="kicker">Copy these</p>
+      <h2>Recipes</h2>
+
+      <h3>A one-time passcode</h3>
+      <p>Force SMS only — never let an OTP fan out to email.</p>
+<pre><code>{ <span class="str">"to"</span>: { <span class="str">"externalId"</span>: <span class="str">"sd-user-8821"</span> },
+  <span class="str">"templateKey"</span>: <span class="str">"otp"</span>,
+  <span class="str">"channels"</span>: [<span class="str">"sms"</span>],
+  <span class="str">"data"</span>: { <span class="str">"code"</span>: <span class="str">"4821"</span> } }</code></pre>
+
+      <h3>An order update, everywhere at once</h3>
+      <p>No <code>channels</code>, so it uses everything the template defines and the
+        person accepts.</p>
+<pre><code>{ <span class="str">"to"</span>: { <span class="str">"externalId"</span>: <span class="str">"sd-user-8821"</span> },
+  <span class="str">"templateKey"</span>: <span class="str">"order-shipped"</span>,
+  <span class="str">"data"</span>: { <span class="str">"order"</span>: { <span class="str">"id"</span>: <span class="str">"A-1001"</span>, <span class="str">"eta"</span>: <span class="str">"Sunday"</span> } } }</code></pre>
+
+      <h3>A reminder for later</h3>
+      <p>Cancel any time before it fires with
+        <code>POST /v1/notifications/{id}/cancel</code>.</p>
+<pre><code>{ <span class="str">"to"</span>: { <span class="str">"externalId"</span>: <span class="str">"sd-user-8821"</span> },
+  <span class="str">"templateKey"</span>: <span class="str">"cart-reminder"</span>,
+  <span class="str">"sendAt"</span>: <span class="str">"2026-08-03T09:00:00Z"</span> }</code></pre>
+
+      <h3>Everyone on a topic</h3>
+<pre><code>POST /v1/topics/dhaka-buyers/broadcast
+Idempotency-Key: launch-announce-v1
+
+{ <span class="str">"templateKey"</span>: <span class="str">"new-feature"</span>, <span class="str">"channels"</span>: [<span class="str">"inapp"</span>, <span class="str">"push"</span>] }</code></pre>
+
+      <h3>A one-off with no template</h3>
+      <p>For things not worth storing. Note <code>to.email</code> — no subscriber needed.</p>
+<pre><code>{ <span class="str">"to"</span>: { <span class="str">"email"</span>: <span class="str">"someone@example.com"</span> },
+  <span class="str">"channels"</span>: [<span class="str">"email"</span>],
+  <span class="str">"content"</span>: { <span class="str">"email"</span>: { <span class="str">"subject"</span>: <span class="str">"Your invoice"</span>,
+                        <span class="str">"html"</span>: <span class="str">"&lt;p&gt;Attached.&lt;/p&gt;"</span> } } }</code></pre>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="prefs">
+      <p class="kicker">Staying welcome</p>
+      <h2>Opt-outs &amp; bounces</h2>
+
+      <h3>Someone unsubscribes</h3>
+      <p>One call. Every future send skips that channel for them automatically — you never
+        add a check anywhere in your code.</p>
+<pre><code>POST /v1/subscribers/{id}/unsubscribe
+{ <span class="str">"channel"</span>: <span class="str">"email"</span> }</code></pre>
+      <p>Finer control by topic — marketing off, receipts on:</p>
+<pre><code>PUT /v1/subscribers/{id}/preferences
+{ <span class="str">"categories"</span>: { <span class="str">"marketing"</span>: <span class="kw">false</span>, <span class="str">"transactional"</span>: <span class="kw">true</span> } }</code></pre>
+
+      <h3>An address goes bad</h3>
+      <p>When a mailbox permanently rejects mail, or someone hits "spam", AWS tells Pulse and
+        the address is added to a suppression list. Every later send to it comes back
+        <span class="pill hold">suppressed</span> without touching the provider.</p>
+
+      <div class="note trap">
+        <span class="tag">Why this isn't optional</span>
+        <p>AWS measures your bounce and complaint rates. Cross roughly 5% bounces or 0.1%
+          complaints and they throttle or suspend your ability to send email <em>at all</em>.
+          The suppression list is what protects that — leave it on.</p>
+      </div>
+      <p>Temporary problems — a full mailbox, a DNS blip — are deliberately <em>not</em>
+        suppressed. Those clear up, and cutting someone off permanently over an afternoon
+        would be wrong.</p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="trouble">
+      <p class="kicker">Diagnosing</p>
+      <h2>When it breaks</h2>
+      <p>Errors always come back the same shape. Read the <code>code</code> — that's the
+        stable part.</p>
+<pre><code>{ <span class="str">"error"</span>: { <span class="str">"code"</span>: <span class="str">"TEMPLATE_NOT_FOUND"</span>, <span class="str">"message"</span>: <span class="str">"no template 'welcome'"</span> } }</code></pre>
+
+      <div class="tw"><table>
+        <thead><tr><th>You see</th><th>It means</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>Stuck on <span class="pill hold">queued</span></td><td>Nothing is draining the queue</td><td>The workers aren't running — <code>pnpm dev</code></td></tr>
+          <tr><td><code>INVALID_API_KEY</code></td><td>Key unknown, or you re-seeded</td><td>Press <em>Use demo key</em> again</td></tr>
+          <tr><td><code>TEMPLATE_NOT_FOUND</code></td><td>No template by that key for this tenant</td><td>Check the Templates tab — keys are case-sensitive</td></tr>
+          <tr><td><code>VALIDATION_FAILED</code></td><td>Bad request body</td><td><code>details</code> lists exactly which fields</td></tr>
+          <tr><td><code>QUOTA_EXCEEDED</code></td><td>Monthly plan limit hit</td><td>Raise the tenant's quota</td></tr>
+          <tr><td><code>SCHEDULE_IN_PAST</code></td><td><code>sendAt</code> already passed</td><td>Send a future time, or drop the field to send now</td></tr>
+          <tr><td>Channel is <span class="pill mute">skipped</span></td><td>No destination or no template body</td><td>Check the person has a phone/device, and the template covers that channel</td></tr>
+          <tr><td>No email in MailHog</td><td>It never got that far</td><td>Open the message in the Delivery log — the per-channel error is there</td></tr>
+        </tbody>
+      </table></div>
+
+      <p>The <strong>Delivery log</strong> is the tool for this. Click any message to see
+        each channel's outcome, the exact content that was rendered, and every delivery
+        attempt with its provider error.</p>
+    </section>
+
+    <!-- ─────────────────────────────────────────────── -->
+    <section id="prod">
+      <p class="kicker">Before real users</p>
+      <h2>Going live</h2>
+      <p>Everything so far runs on your laptop against local stand-ins. Two independent
+        tracks get you to production — you don't have to do them in order.</p>
+
+      <div class="duo">
+        <div>
+          <h4>Email, this afternoon</h4>
+          <p>Point <code>EMAIL_PROVIDER=smtp</code> at any real SMTP host — Postmark, Resend,
+            Brevo. Real email, no AWS, no waiting.</p>
+        </div>
+        <div>
+          <h4>Email on SES, in a few days</h4>
+          <p>Cheaper at volume ($0.10 per thousand), but you must verify a domain and ask AWS
+            to lift the sandbox — usually 24–48 hours.</p>
+        </div>
+      </div>
+
+      <h3>The checklist</h3>
+      <ul>
+        <li><strong>Deploy</strong> — <code>cdk deploy -c env=dev</code> first; dev sends
+          nothing, so it's a safe way to shake out permissions.</li>
+        <li><strong>A real admin token</strong> — 32+ random characters. The API refuses to
+          start in production without one.</li>
+        <li><strong>Email</strong> — an SMTP provider, or a verified SES domain with SPF,
+          DKIM and DMARC set up.</li>
+        <li><strong>Push</strong> — a Firebase project and its service-account JSON. One
+          credential covers Android and iOS.</li>
+        <li><strong>SMS</strong> — a BulkSMS BD key. Their rate is roughly a hundredth of
+          AWS SNS for Bangladesh, which matters enormously at volume.</li>
+        <li><strong>Bounce handling</strong> — connect SES feedback to the topic the deploy
+          created. Skip this and your sending reputation degrades silently.</li>
+        <li><strong>A tenant per project</strong> — separate keys, so revoking one doesn't
+          affect the others.</li>
+      </ul>
+
+      <p>Step-by-step commands for all of this are in
+        <code>docs/runbooks/deploy.md</code>.</p>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Pulse · <code>~/Desktop/pulse</code> — full API reference in
+      <code>docs/openapi.yaml</code>, design rationale in <code>docs/ARCHITECTURE.md</code>,
+      cost model in <code>docs/COSTS.md</code>.</p>
+  </footer>
+
+</div>
+
+<script>
+  // Highlight the section you're reading in the sidebar.
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    if (!links.length || !('IntersectionObserver' in window)) return;
+
+    var byId = {};
+    links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+
+    var visible = new Set();
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) visible.add(e.target.id);
+        else visible.delete(e.target.id);
+      });
+      // Topmost visible section wins, so the marker never flickers between two.
+      var order = Object.keys(byId);
+      var current = order.find(function (id) { return visible.has(id); });
+      links.forEach(function (a) { a.classList.remove('on'); });
+      if (current && byId[current]) byId[current].classList.add('on');
+    }, { rootMargin: '-8% 0px -70% 0px', threshold: 0 });
+
+    document.querySelectorAll('main section[id]').forEach(function (s) { obs.observe(s); });
+  })();
+</script>
+
+</body>
+</html>
